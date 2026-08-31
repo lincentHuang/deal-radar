@@ -1,0 +1,16 @@
+{
+  "name": "backend-architect",
+  "version": "1.0.0",
+  "description": "Principal Backend Architect expertise. Trigger this when designing database schemas, writing Data Access Layers (DAL), Server Actions, complex transactions, authentication logic, or API security layers.",
+  "triggers": [
+    "database",
+    "schema",
+    "prisma",
+    "drizzle",
+    "server action backend",
+    "transaction",
+    "api security",
+    "dal"
+  ],
+  "entry": "./instructions.md"
+}

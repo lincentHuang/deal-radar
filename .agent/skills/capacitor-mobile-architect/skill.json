@@ -1,0 +1,16 @@
+{
+    "name": "capacitor-mobile-architect",
+    "version": "1.0.0",
+    "description": "Expert Mobile & Hybrid App Architect for Capacitor + Next.js. Trigger this when integrating mobile native plugins (Camera, Push, Biometrics, Storage), handling Safe Area, deep linking, offline sync, or mobile build setups.",
+    "triggers": [
+        "capacitor",
+        "mobile app",
+        "ios",
+        "android",
+        "native plugin",
+        "safe area",
+        "deep link",
+        "push notification"
+    ],
+    "entry": "./capacitor-architect.md"
+}
