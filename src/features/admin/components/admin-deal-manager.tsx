@@ -1,12 +1,15 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { SmartDeal } from '@/features/deals/types/deal.types';
 import { 
   updateDealAction, 
   deleteDealAction, 
   toggleDealHotAction, 
-  toggleDealFlashAction 
+  toggleDealFlashAction,
+  batchDeleteDealsAction,
+  batchToggleHotDealsAction,
+  batchToggleFlashDealsAction
 } from '@/features/deals/server/deal.actions';
 import { 
   Search, 
@@ -26,11 +29,23 @@ import {
   ImageIcon,
   Maximize2,
   Eye,
-  Sparkles
+  Sparkles,
+  CheckSquare,
+  Square,
+  MinusSquare,
+  SlidersHorizontal,
+  Copy,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight
 } from 'lucide-react';
 import { useMobileNative } from '@/shared/hooks/use-mobile-native';
 import Image from 'next/image';
 import { MerchantCreateForm } from '@/features/merchant/components/merchant-create-form';
+import { BatchEditModal } from '@/features/deals/components/batch-edit-modal';
+import { DuplicateDealsModal } from '@/features/deals/components/duplicate-deals-modal';
+import { findDuplicateDeals } from '@/features/deals/utils/duplicate-detector';
 
 const POPULAR_SUGGESTED_TAGS = [
   '#買一送一',
@@ -50,6 +65,9 @@ interface AdminDealManagerProps {
 
 export const AdminDealManager: React.FC<AdminDealManagerProps> = ({ initialDeals, onDealsChange }) => {
   const [deals, setDeals] = useState<SmartDeal[]>(initialDeals);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isBatchEditModalOpen, setIsBatchEditModalOpen] = useState<boolean>(false);
+  const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
@@ -59,7 +77,25 @@ export const AdminDealManager: React.FC<AdminDealManagerProps> = ({ initialDeals
   const [previewImageEnlarged, setPreviewImageEnlarged] = useState<string | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
   const [actionMessage, setActionMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  
+  // 分頁狀態
+  const [pageSize, setPageSize] = useState<number>(20);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  
   const { triggerHaptic } = useMobileNative();
+
+  // 當外部資料庫更新或 Props 變動時同步最新列表
+  useEffect(() => {
+    setDeals(initialDeals);
+  }, [initialDeals]);
+
+  // 當篩選條件或每頁筆數改變時重置回第 1 頁
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, categoryFilter, sourceFilter, pageSize]);
+
+  // 智慧偵測重複活動群組
+  const duplicateGroups = useMemo(() => findDuplicateDeals(deals), [deals]);
 
   const handleAddTag = (tagToAdd?: string) => {
     if (!editingDeal) return;
@@ -121,6 +157,105 @@ export const AdminDealManager: React.FC<AdminDealManagerProps> = ({ initialDeals
     return matchesQuery && matchesCategory && matchesSource;
   });
 
+  // 分頁計算
+  const totalItems = filteredDeals.length;
+  const effectivePageSize = pageSize === 999999 ? (totalItems || 1) : pageSize;
+  const totalPages = Math.max(1, Math.ceil(totalItems / effectivePageSize));
+  const validCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+  const startIndex = (validCurrentPage - 1) * (pageSize === 999999 ? totalItems : pageSize);
+  const endIndex = pageSize === 999999 ? totalItems : Math.min(startIndex + pageSize, totalItems);
+  const paginatedDeals = pageSize === 999999 ? filteredDeals : filteredDeals.slice(startIndex, endIndex);
+
+  // 頁碼陣列計算
+  const pageNumbers = useMemo(() => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    if (validCurrentPage <= 4) {
+      return [1, 2, 3, 4, 5, '...', totalPages];
+    }
+    if (validCurrentPage >= totalPages - 3) {
+      return [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    }
+    return [1, '...', validCurrentPage - 1, validCurrentPage, validCurrentPage + 1, '...', totalPages];
+  }, [totalPages, validCurrentPage]);
+
+  // 全選狀態 (針對當前頁面資料)
+  const isAllSelected = paginatedDeals.length > 0 && paginatedDeals.every((d) => selectedIds.includes(d.id));
+  const isSomeSelected = paginatedDeals.some((d) => selectedIds.includes(d.id)) && !isAllSelected;
+
+  const handleSelectAll = () => {
+    triggerHaptic('light');
+    if (isAllSelected) {
+      const pageIdSet = new Set(paginatedDeals.map((d) => d.id));
+      setSelectedIds((prev) => prev.filter((id) => !pageIdSet.has(id)));
+    } else {
+      const newSelected = new Set([...selectedIds, ...paginatedDeals.map((d) => d.id)]);
+      setSelectedIds(Array.from(newSelected));
+    }
+  };
+
+  const handleToggleSelect = (id: string) => {
+    triggerHaptic('light');
+    setSelectedIds((prev) => 
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleBatchToggleHot = async (isHot: boolean) => {
+    if (selectedIds.length === 0) return;
+    triggerHaptic('medium');
+    const res = await batchToggleHotDealsAction(selectedIds, isHot);
+    if (res.success) {
+      const updatedMap = new Map(res.updatedDeals.map((d) => [d.id, d]));
+      setDeals((prev) => prev.map((d) => updatedMap.get(d.id) || d));
+      showFeedback(res.message);
+      onDealsChange?.();
+    } else {
+      showFeedback(res.message, 'error');
+    }
+  };
+
+  const handleBatchToggleFlash = async (isFlashDeal: boolean) => {
+    if (selectedIds.length === 0) return;
+    triggerHaptic('medium');
+    const res = await batchToggleFlashDealsAction(selectedIds, isFlashDeal);
+    if (res.success) {
+      const updatedMap = new Map(res.updatedDeals.map((d) => [d.id, d]));
+      setDeals((prev) => prev.map((d) => updatedMap.get(d.id) || d));
+      showFeedback(res.message);
+      onDealsChange?.();
+    } else {
+      showFeedback(res.message, 'error');
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.length === 0) return;
+    if (!confirm(`確定要批量下架並刪除選取的 ${selectedIds.length} 筆特價卡片嗎？此操作將即時自情報站移除。`)) {
+      return;
+    }
+    triggerHaptic('warning');
+    const res = await batchDeleteDealsAction(selectedIds);
+    if (res.success) {
+      const deletedIdSet = new Set(selectedIds);
+      setDeals((prev) => prev.filter((d) => !deletedIdSet.has(d.id)));
+      setSelectedIds([]);
+      showFeedback(res.message);
+      onDealsChange?.();
+    } else {
+      showFeedback(res.message, 'error');
+    }
+  };
+
+  const handleBatchEditSuccess = (updatedDeals: SmartDeal[], message: string) => {
+    const updatedMap = new Map(updatedDeals.map((d) => [d.id, d]));
+    setDeals((prev) => prev.map((d) => updatedMap.get(d.id) || d));
+    setSelectedIds([]);
+    showFeedback(message);
+    onDealsChange?.();
+  };
+
   const handleToggleHot = async (dealId: string) => {
     triggerHaptic('light');
     const res = await toggleDealHotAction(dealId);
@@ -149,6 +284,7 @@ export const AdminDealManager: React.FC<AdminDealManagerProps> = ({ initialDeals
     const res = await deleteDealAction(dealId);
     if (res.success) {
       setDeals((prev) => prev.filter((d) => d.id !== dealId));
+      setSelectedIds((prev) => prev.filter((id) => id !== dealId));
       showFeedback(`已成功下架並刪除卡片`);
       onDealsChange?.();
     } else {
@@ -230,16 +366,64 @@ export const AdminDealManager: React.FC<AdminDealManagerProps> = ({ initialDeals
           </select>
         </div>
 
-        {/* 新增卡片按鈕 */}
-        <button
-          type="button"
-          onClick={() => setIsAddModalOpen(true)}
-          className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-2xl shadow-sm transition-all flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer flex-shrink-0"
-        >
-          <Plus className="w-4 h-4" />
-          <span>手動新增卡片</span>
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {duplicateGroups.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setIsDuplicateModalOpen(true)}
+              className="px-3.5 py-2.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-xs font-black rounded-2xl shadow-xs transition-all flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer"
+              title="查看並清理重複卡片"
+            >
+              <Copy className="w-3.5 h-3.5 text-amber-600" />
+              <span>比對重複 ({duplicateGroups.length})</span>
+            </button>
+          )}
+
+          {/* 新增卡片按鈕 */}
+          <button
+            type="button"
+            onClick={() => setIsAddModalOpen(true)}
+            className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-2xl shadow-sm transition-all flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>手動新增卡片</span>
+          </button>
+        </div>
       </div>
+
+      {/* 重複卡片智慧提醒橫幅 */}
+      {duplicateGroups.length > 0 && (
+        <div className="p-4 bg-amber-50/80 border border-amber-200/90 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-amber-950 shadow-2xs animate-in fade-in">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-2xl bg-amber-500 text-white font-bold flex-shrink-0 shadow-xs">
+              <Copy className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="text-xs font-black text-slate-900">
+                  系統智慧偵測到 {duplicateGroups.length} 組可能重複的特價情報
+                </h4>
+                <span className="px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 text-[10px] font-black">
+                  建議清理
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-600 mt-0.5">
+                包含相同品項、價格重疊或相同來源之活動，點擊即可開啟雙欄比對並自選要保留的卡片
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsDuplicateModalOpen(true)}
+            className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-black rounded-2xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 flex-shrink-0"
+          >
+            <span>立即比對保留</span>
+            <span className="px-1.5 py-0.2 rounded-full bg-white/25 text-[10px]">
+              {duplicateGroups.length} 組
+            </span>
+          </button>
+        </div>
+      )}
 
       {/* 回饋訊息 */}
       {actionMessage && (
@@ -255,12 +439,40 @@ export const AdminDealManager: React.FC<AdminDealManagerProps> = ({ initialDeals
 
       {/* 卡片清單表格 */}
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 min-h-[60px]">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-black text-slate-900">特價卡片清單</span>
             <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600">
               共 {filteredDeals.length} 筆
             </span>
+            {selectedIds.length > 0 && (
+              <span className="text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-700 animate-in fade-in">
+                已選取 {selectedIds.length} 筆
+              </span>
+            )}
+          </div>
+
+          {/* 批量操作快捷按鈕 */}
+          <div className="flex items-center gap-2 min-h-[32px]">
+            {selectedIds.length > 0 && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setIsBatchEditModalOpen(true)}
+                  className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-extrabold rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5" />
+                  <span>批量編輯 ({selectedIds.length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedIds([])}
+                  className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold rounded-xl transition-all cursor-pointer"
+                >
+                  取消選取
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -268,6 +480,22 @@ export const AdminDealManager: React.FC<AdminDealManagerProps> = ({ initialDeals
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50/80 text-slate-500 font-bold border-b border-slate-100">
               <tr>
+                <th className="py-3 px-4 w-10">
+                  <button
+                    type="button"
+                    onClick={handleSelectAll}
+                    className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer flex items-center justify-center"
+                    title={isAllSelected ? '取消全選本頁' : '全選目前頁面卡片'}
+                  >
+                    {isAllSelected ? (
+                      <CheckSquare className="w-4 h-4 text-rose-600" />
+                    ) : isSomeSelected ? (
+                      <MinusSquare className="w-4 h-4 text-rose-500" />
+                    ) : (
+                      <Square className="w-4 h-4" />
+                    )}
+                  </button>
+                </th>
                 <th className="py-3 px-4">商品與活動</th>
                 <th className="py-3 px-4">品牌通路</th>
                 <th className="py-3 px-4">特惠價格</th>
@@ -277,138 +505,281 @@ export const AdminDealManager: React.FC<AdminDealManagerProps> = ({ initialDeals
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-              {filteredDeals.length === 0 ? (
+              {paginatedDeals.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-slate-400">
+                  <td colSpan={7} className="py-12 text-center text-slate-400">
                     📭 無符合條件的特價卡片
                   </td>
                 </tr>
               ) : (
-                filteredDeals.map((deal) => (
-                  <tr key={deal.id} className="hover:bg-slate-50/60 transition-colors">
-                    {/* 商品與活動 */}
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-3 min-w-[200px]">
-                        {deal.imageUrl ? (
-                          <div className="w-12 h-12 rounded-xl overflow-hidden bg-slate-100 flex-shrink-0 relative">
-                            <Image
-                              src={deal.imageUrl}
-                              alt={deal.title}
-                              fill
-                              sizes="48px"
-                              className="object-cover"
-                            />
+                paginatedDeals.map((deal) => {
+                  const isSelected = selectedIds.includes(deal.id);
+                  return (
+                    <tr 
+                      key={deal.id} 
+                      className={`transition-colors ${
+                        isSelected ? 'bg-rose-50/40 hover:bg-rose-50/60' : 'hover:bg-slate-50/60'
+                      }`}
+                    >
+                      {/* Checkbox */}
+                      <td className="py-3 px-4 w-10">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleSelect(deal.id)}
+                          className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer flex items-center justify-center"
+                        >
+                          {isSelected ? (
+                            <CheckSquare className="w-4 h-4 text-rose-600" />
+                          ) : (
+                            <Square className="w-4 h-4 text-slate-300 hover:text-slate-500" />
+                          )}
+                        </button>
+                      </td>
+
+                      {/* 商品與活動 */}
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-3 min-w-[200px]">
+                          {deal.imageUrl ? (
+                            <div className="w-12 h-12 rounded-xl overflow-hidden bg-slate-100 flex-shrink-0 relative">
+                              <Image
+                                src={deal.imageUrl}
+                                alt={deal.title}
+                                fill
+                                sizes="48px"
+                                className="object-cover"
+                              />
+                            </div>
+                          ) : (
+                            <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 flex-shrink-0">
+                              <Tag className="w-5 h-5" />
+                            </div>
+                          )}
+                          <div className="flex flex-col">
+                            <span className="font-bold text-slate-900 line-clamp-1">{deal.title}</span>
+                            <span className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
+                              <span>ID: {deal.id.slice(0, 16)}...</span>
+                              <span className="px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 uppercase font-mono">{deal.category}</span>
+                            </span>
                           </div>
-                        ) : (
-                          <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 flex-shrink-0">
-                            <Tag className="w-5 h-5" />
-                          </div>
-                        )}
+                        </div>
+                      </td>
+
+                      {/* 品牌通路 */}
+                      <td className="py-3 px-4">
                         <div className="flex flex-col">
-                          <span className="font-bold text-slate-900 line-clamp-1">{deal.title}</span>
-                          <span className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
-                            <span>ID: {deal.id.slice(0, 16)}...</span>
-                            <span className="px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 uppercase font-mono">{deal.category}</span>
+                          <span className="font-bold text-slate-800">{deal.merchant.name}</span>
+                          <span className="text-[10px] text-slate-400">{deal.channelType === 'online' ? '🌐 線上電商' : '🏬 實體門市'}</span>
+                        </div>
+                      </td>
+
+                      {/* 特惠價格 */}
+                      <td className="py-3 px-4">
+                        <div className="flex flex-col">
+                          <span className="font-black text-rose-600 text-sm">
+                            ${deal.discountPrice ?? '--'}
+                          </span>
+                          {deal.originalPrice && (
+                            <span className="text-[10px] text-slate-400 line-through">
+                              ${deal.originalPrice}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* 品項與條件 */}
+                      <td className="py-3 px-4">
+                        <div className="flex flex-col max-w-[220px]">
+                          <span className="text-slate-800 line-clamp-1 font-semibold">
+                            {deal.targetItems.join(', ')}
+                          </span>
+                          <span className="text-[10px] text-slate-500 line-clamp-1">
+                            {deal.conditions.join(' · ')}
                           </span>
                         </div>
-                      </div>
-                    </td>
+                      </td>
 
-                    {/* 品牌通路 */}
-                    <td className="py-3 px-4">
-                      <div className="flex flex-col">
-                        <span className="font-bold text-slate-800">{deal.merchant.name}</span>
-                        <span className="text-[10px] text-slate-400">{deal.channelType === 'online' ? '🌐 線上電商' : '🏬 實體門市'}</span>
-                      </div>
-                    </td>
+                      {/* 狀態標記 */}
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-1.5">
+                          {/* 熱門開關 */}
+                          <button
+                            type="button"
+                            onClick={() => handleToggleHot(deal.id)}
+                            title="切換熱門狀態"
+                            className={`p-1.5 rounded-xl border transition-all cursor-pointer ${
+                              deal.isHot
+                                ? 'bg-rose-50 border-rose-200 text-rose-600 font-bold'
+                                : 'bg-slate-50 border-slate-200 text-slate-400 hover:text-slate-600'
+                            }`}
+                          >
+                            <Flame className="w-3.5 h-3.5" />
+                          </button>
 
-                    {/* 特惠價格 */}
-                    <td className="py-3 px-4">
-                      <div className="flex flex-col">
-                        <span className="font-black text-rose-600 text-sm">
-                          ${deal.discountPrice ?? '--'}
-                        </span>
-                        {deal.originalPrice && (
-                          <span className="text-[10px] text-slate-400 line-through">
-                            ${deal.originalPrice}
-                          </span>
-                        )}
-                      </div>
-                    </td>
+                          {/* 快閃開關 */}
+                          <button
+                            type="button"
+                            onClick={() => handleToggleFlash(deal.id)}
+                            title="切換快閃狀態"
+                            className={`p-1.5 rounded-xl border transition-all cursor-pointer ${
+                              deal.isFlashDeal
+                                ? 'bg-amber-50 border-amber-200 text-amber-600 font-bold'
+                                : 'bg-slate-50 border-slate-200 text-slate-400 hover:text-slate-600'
+                            }`}
+                          >
+                            <Zap className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
 
-                    {/* 品項與條件 */}
-                    <td className="py-3 px-4">
-                      <div className="flex flex-col max-w-[220px]">
-                        <span className="text-slate-800 line-clamp-1 font-semibold">
-                          {deal.targetItems.join(', ')}
-                        </span>
-                        <span className="text-[10px] text-slate-500 line-clamp-1">
-                          {deal.conditions.join(' · ')}
-                        </span>
-                      </div>
-                    </td>
-
-                    {/* 狀態標記 */}
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-1.5">
-                        {/* 熱門開關 */}
-                        <button
-                          type="button"
-                          onClick={() => handleToggleHot(deal.id)}
-                          title="切換熱門狀態"
-                          className={`p-1.5 rounded-xl border transition-all cursor-pointer ${
-                            deal.isHot
-                              ? 'bg-rose-50 border-rose-200 text-rose-600 font-bold'
-                              : 'bg-slate-50 border-slate-200 text-slate-400 hover:text-slate-600'
-                          }`}
-                        >
-                          <Flame className="w-3.5 h-3.5" />
-                        </button>
-
-                        {/* 快閃開關 */}
-                        <button
-                          type="button"
-                          onClick={() => handleToggleFlash(deal.id)}
-                          title="切換快閃狀態"
-                          className={`p-1.5 rounded-xl border transition-all cursor-pointer ${
-                            deal.isFlashDeal
-                              ? 'bg-amber-50 border-amber-200 text-amber-600 font-bold'
-                              : 'bg-slate-50 border-slate-200 text-slate-400 hover:text-slate-600'
-                          }`}
-                        >
-                          <Zap className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-
-                    {/* 操作 */}
-                    <td className="py-3 px-4 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setEditingDeal(deal)}
-                          className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all cursor-pointer"
-                          title="編輯卡片"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(deal.id, deal.title)}
-                          className="p-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 transition-all cursor-pointer"
-                          title="下架刪除"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                      {/* 操作 */}
+                      <td className="py-3 px-4 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setEditingDeal(deal)}
+                            className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all cursor-pointer"
+                            title="編輯卡片"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(deal.id, deal.title)}
+                            className="p-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 transition-all cursor-pointer"
+                            title="下架刪除"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
+
+        {/* 分頁控制導覽列 (Pagination Bar) */}
+        <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+          {/* 左側：顯示目前筆數範圍 */}
+          <div className="text-slate-500 font-medium">
+            顯示第 <span className="font-bold text-slate-800">{totalItems === 0 ? 0 : startIndex + 1}</span> - <span className="font-bold text-slate-800">{endIndex}</span> 筆，共 <span className="font-bold text-slate-900">{totalItems}</span> 筆
+          </div>
+
+          {/* 中間：換頁按鈕組 */}
+          {totalPages > 1 && (
+            <div className="flex items-center gap-1">
+              {/* 第一頁 */}
+              <button
+                type="button"
+                disabled={validCurrentPage === 1}
+                onClick={() => {
+                  triggerHaptic('light');
+                  setCurrentPage(1);
+                }}
+                className="p-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-white text-slate-600 cursor-pointer disabled:cursor-not-allowed transition-all"
+                title="第一頁"
+              >
+                <ChevronsLeft className="w-4 h-4" />
+              </button>
+
+              {/* 上一頁 */}
+              <button
+                type="button"
+                disabled={validCurrentPage === 1}
+                onClick={() => {
+                  triggerHaptic('light');
+                  setCurrentPage((p) => Math.max(1, p - 1));
+                }}
+                className="p-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-white text-slate-600 cursor-pointer disabled:cursor-not-allowed transition-all"
+                title="上一頁"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+
+              {/* 頁碼按鈕 */}
+              <div className="flex items-center gap-1 px-1">
+                {pageNumbers.map((p, idx) => {
+                  if (p === '...') {
+                    return (
+                      <span key={`ellipsis-${idx}`} className="px-1 text-slate-400 font-bold">
+                        ...
+                      </span>
+                    );
+                  }
+                  const pageNum = Number(p);
+                  const isActive = pageNum === validCurrentPage;
+                  return (
+                    <button
+                      key={pageNum}
+                      type="button"
+                      onClick={() => {
+                        triggerHaptic('light');
+                        setCurrentPage(pageNum);
+                      }}
+                      className={`w-8 h-8 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center ${
+                        isActive
+                          ? 'bg-rose-600 text-white shadow-xs scale-105'
+                          : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* 下一頁 */}
+              <button
+                type="button"
+                disabled={validCurrentPage === totalPages}
+                onClick={() => {
+                  triggerHaptic('light');
+                  setCurrentPage((p) => Math.min(totalPages, p + 1));
+                }}
+                className="p-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-white text-slate-600 cursor-pointer disabled:cursor-not-allowed transition-all"
+                title="下一頁"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+
+              {/* 最後一頁 */}
+              <button
+                type="button"
+                disabled={validCurrentPage === totalPages}
+                onClick={() => {
+                  triggerHaptic('light');
+                  setCurrentPage(totalPages);
+                }}
+                className="p-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-white text-slate-600 cursor-pointer disabled:cursor-not-allowed transition-all"
+                title="最後一頁"
+              >
+                <ChevronsRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {/* 右側：每頁顯示筆數選擇器 */}
+          <div className="flex items-center gap-2">
+            <span className="text-slate-500 font-medium whitespace-nowrap">每頁顯示：</span>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              className="px-2.5 py-1.5 bg-white font-bold text-slate-800 rounded-xl border border-slate-200 focus:outline-none focus:border-rose-500 shadow-2xs cursor-pointer"
+            >
+              <option value={20}>20 筆 / 頁</option>
+              <option value={50}>50 筆 / 頁</option>
+              <option value={100}>100 筆 / 頁</option>
+              <option value={999999}>全部顯示</option>
+            </select>
+          </div>
+        </div>
       </div>
+
 
       {/* 編輯卡片 Modal */}
       {editingDeal && (
@@ -774,6 +1145,95 @@ export const AdminDealManager: React.FC<AdminDealManagerProps> = ({ initialDeals
           </div>
         </div>
       )}
+
+      {/* 批量編輯 Modal */}
+      <BatchEditModal
+        isOpen={isBatchEditModalOpen}
+        onClose={() => setIsBatchEditModalOpen(false)}
+        selectedIds={selectedIds}
+        selectedDeals={deals.filter((d) => selectedIds.includes(d.id))}
+        isAdmin={true}
+        onSuccess={handleBatchEditSuccess}
+      />
+
+      {/* 重複情報比對與清理 Modal */}
+      <DuplicateDealsModal
+        isOpen={isDuplicateModalOpen}
+        onClose={() => setIsDuplicateModalOpen(false)}
+        duplicateGroups={duplicateGroups}
+        onResolved={(keptDeal, deletedIds, message) => {
+          const deletedSet = new Set(deletedIds);
+          setDeals((prev) => 
+            prev
+              .filter((d) => !deletedSet.has(d.id))
+              .map((d) => (d.id === keptDeal.id ? keptDeal : d))
+          );
+          setSelectedIds((prev) => prev.filter((id) => !deletedSet.has(id)));
+          showFeedback(message);
+          onDealsChange?.();
+        }}
+      />
+
+      {/* 底部浮動批量操作工具列 (Floating Batch Bar) */}
+      {selectedIds.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-900/95 text-white backdrop-blur-md px-5 py-3 rounded-2xl shadow-2xl border border-slate-700/80 flex flex-wrap items-center gap-3 animate-in slide-in-from-bottom-5 duration-200 max-w-[92vw]">
+          <div className="flex items-center gap-2 border-r border-slate-700 pr-3">
+            <span className="text-xs font-bold text-slate-300">已選取</span>
+            <span className="px-2 py-0.5 rounded-full bg-rose-500 text-white font-black text-xs">
+              {selectedIds.length}
+            </span>
+            <span className="text-xs font-bold text-slate-300">筆卡片</span>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setIsBatchEditModalOpen(true)}
+              className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-900 text-xs font-extrabold rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5 text-slate-700" />
+              <span>批量編輯</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleBatchToggleHot(true)}
+              className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-extrabold rounded-xl shadow-xs transition-all flex items-center gap-1 cursor-pointer active:scale-95"
+            >
+              <Flame className="w-3.5 h-3.5" />
+              <span>設為熱門</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleBatchToggleFlash(true)}
+              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-extrabold rounded-xl shadow-xs transition-all flex items-center gap-1 cursor-pointer active:scale-95"
+            >
+              <Zap className="w-3.5 h-3.5" />
+              <span>設為快閃</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleBatchDelete}
+              className="px-3 py-1.5 bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-800/60 text-xs font-extrabold rounded-xl transition-all flex items-center gap-1 cursor-pointer active:scale-95"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>批量刪除</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSelectedIds([])}
+              className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white rounded-xl transition-colors cursor-pointer ml-1"
+              title="取消選取"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+

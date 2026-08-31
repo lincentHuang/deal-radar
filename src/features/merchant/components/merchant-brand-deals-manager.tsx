@@ -1,8 +1,13 @@
 'use client';
-
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { SmartDeal } from '@/features/deals/types/deal.types';
-import { updateDealAction, deleteDealAction, toggleDealHotAction } from '@/features/deals/server/deal.actions';
+import { 
+  updateDealAction, 
+  deleteDealAction, 
+  toggleDealHotAction,
+  batchDeleteDealsAction,
+  batchToggleHotDealsAction
+} from '@/features/deals/server/deal.actions';
 import { 
   Store, 
   Plus, 
@@ -19,11 +24,23 @@ import {
   Sparkles,
   ImageIcon,
   Maximize2,
-  ExternalLink
+  ExternalLink,
+  CheckSquare,
+  Square,
+  MinusSquare,
+  SlidersHorizontal,
+  Copy,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight
 } from 'lucide-react';
 import { useMobileNative } from '@/shared/hooks/use-mobile-native';
 import Image from 'next/image';
 import { MerchantCreateForm } from './merchant-create-form';
+import { BatchEditModal } from '@/features/deals/components/batch-edit-modal';
+import { DuplicateDealsModal } from '@/features/deals/components/duplicate-deals-modal';
+import { findDuplicateDeals } from '@/features/deals/utils/duplicate-detector';
 
 const POPULAR_SUGGESTED_TAGS = [
   '#買一送一',
@@ -48,13 +65,34 @@ export const MerchantBrandDealsManager: React.FC<MerchantBrandDealsManagerProps>
   onDealsChange,
 }) => {
   const [deals, setDeals] = useState<SmartDeal[]>(brandDeals);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isBatchEditModalOpen, setIsBatchEditModalOpen] = useState<boolean>(false);
+  const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState<boolean>(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
   const [editingDeal, setEditingDeal] = useState<SmartDeal | null>(null);
   const [newTagInput, setNewTagInput] = useState<string>('');
   const [tagError, setTagError] = useState<string | null>(null);
   const [previewImageEnlarged, setPreviewImageEnlarged] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  
+  // 分頁狀態
+  const [pageSize, setPageSize] = useState<number>(20);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  
   const { triggerHaptic } = useMobileNative();
+
+  // 當外部品牌或特價卡片更新時同步
+  useEffect(() => {
+    setDeals(brandDeals);
+  }, [brandDeals]);
+
+  // 當品牌或每頁筆數改變時重置回第 1 頁
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [brandName, pageSize]);
+
+  // 智慧偵測本品牌重複特價情報
+  const duplicateGroups = useMemo(() => findDuplicateDeals(deals), [deals]);
 
   const handleAddTag = (tagToAdd?: string) => {
     if (!editingDeal) return;
@@ -102,6 +140,88 @@ export const MerchantBrandDealsManager: React.FC<MerchantBrandDealsManagerProps>
     setTimeout(() => setFeedback(null), 3500);
   };
 
+  // 分頁計算
+  const totalItems = deals.length;
+  const effectivePageSize = pageSize === 999999 ? (totalItems || 1) : pageSize;
+  const totalPages = Math.max(1, Math.ceil(totalItems / effectivePageSize));
+  const validCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+  const startIndex = (validCurrentPage - 1) * (pageSize === 999999 ? totalItems : pageSize);
+  const endIndex = pageSize === 999999 ? totalItems : Math.min(startIndex + pageSize, totalItems);
+  const paginatedDeals = pageSize === 999999 ? deals : deals.slice(startIndex, endIndex);
+
+  // 頁碼陣列計算
+  const pageNumbers = useMemo(() => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    if (validCurrentPage <= 4) {
+      return [1, 2, 3, 4, 5, '...', totalPages];
+    }
+    if (validCurrentPage >= totalPages - 3) {
+      return [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    }
+    return [1, '...', validCurrentPage - 1, validCurrentPage, validCurrentPage + 1, '...', totalPages];
+  }, [totalPages, validCurrentPage]);
+
+  const isAllSelected = paginatedDeals.length > 0 && paginatedDeals.every((d) => selectedIds.includes(d.id));
+  const isSomeSelected = paginatedDeals.some((d) => selectedIds.includes(d.id)) && !isAllSelected;
+
+  const handleSelectAll = () => {
+    triggerHaptic('light');
+    if (isAllSelected) {
+      const pageIdSet = new Set(paginatedDeals.map((d) => d.id));
+      setSelectedIds((prev) => prev.filter((id) => !pageIdSet.has(id)));
+    } else {
+      const newSelected = new Set([...selectedIds, ...paginatedDeals.map((d) => d.id)]);
+      setSelectedIds(Array.from(newSelected));
+    }
+  };
+
+  const handleToggleSelect = (id: string) => {
+    triggerHaptic('light');
+    setSelectedIds((prev) => 
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleBatchToggleHot = async (isHot: boolean) => {
+    if (selectedIds.length === 0) return;
+    triggerHaptic('medium');
+    const res = await batchToggleHotDealsAction(selectedIds, isHot);
+    if (res.success) {
+      const updatedMap = new Map(res.updatedDeals.map((d) => [d.id, d]));
+      setDeals((prev) => prev.map((d) => updatedMap.get(d.id) || d));
+      showFeedback(res.message);
+      onDealsChange?.();
+    } else {
+      showFeedback(res.message, 'error');
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.length === 0) return;
+    if (!confirm(`確定要批量下架選取的 ${selectedIds.length} 筆特惠情報嗎？`)) return;
+    triggerHaptic('warning');
+    const res = await batchDeleteDealsAction(selectedIds);
+    if (res.success) {
+      const deletedIdSet = new Set(selectedIds);
+      setDeals((prev) => prev.filter((d) => !deletedIdSet.has(d.id)));
+      setSelectedIds([]);
+      showFeedback(res.message);
+      onDealsChange?.();
+    } else {
+      showFeedback(res.message, 'error');
+    }
+  };
+
+  const handleBatchEditSuccess = (updatedDeals: SmartDeal[], message: string) => {
+    const updatedMap = new Map(updatedDeals.map((d) => [d.id, d]));
+    setDeals((prev) => prev.map((d) => updatedMap.get(d.id) || d));
+    setSelectedIds([]);
+    showFeedback(message);
+    onDealsChange?.();
+  };
+
   const handleToggleHot = async (dealId: string) => {
     triggerHaptic('light');
     const res = await toggleDealHotAction(dealId);
@@ -118,6 +238,7 @@ export const MerchantBrandDealsManager: React.FC<MerchantBrandDealsManagerProps>
     const res = await deleteDealAction(dealId);
     if (res.success) {
       setDeals((prev) => prev.filter((d) => d.id !== dealId));
+      setSelectedIds((prev) => prev.filter((id) => id !== dealId));
       showFeedback('卡片已成功下架');
       onDealsChange?.();
     } else {
@@ -185,28 +306,113 @@ export const MerchantBrandDealsManager: React.FC<MerchantBrandDealsManagerProps>
 
       {/* 品牌卡片清單 */}
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
-        <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h3 className="text-base font-black text-slate-900">
-              【{brandName}】官方優惠卡片管理
-            </h3>
-            <span className="text-xs text-slate-400">
-              小編僅限瀏覽與管理屬於本品牌的特價活動
-            </span>
+        <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 min-h-[60px]">
+          <div className="flex items-center gap-3">
+            {deals.length > 0 && (
+              <button
+                type="button"
+                onClick={handleSelectAll}
+                className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 cursor-pointer flex items-center gap-1.5 text-xs font-bold transition-all"
+                title={isAllSelected ? '取消全選本頁' : '全選本頁卡片'}
+              >
+                {isAllSelected ? (
+                  <CheckSquare className="w-4 h-4 text-emerald-600" />
+                ) : isSomeSelected ? (
+                  <MinusSquare className="w-4 h-4 text-emerald-500" />
+                ) : (
+                  <Square className="w-4 h-4" />
+                )}
+                <span>全選</span>
+              </button>
+            )}
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-black text-slate-900">
+                  【{brandName}】官方優惠卡片管理
+                </h3>
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                  共 {totalItems} 筆
+                </span>
+                {selectedIds.length > 0 && (
+                  <span className="text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 animate-in fade-in">
+                    已選取 {selectedIds.length} 筆
+                  </span>
+                )}
+              </div>
+              <span className="text-xs text-slate-400">
+                小編僅限瀏覽與管理屬於本品牌的特價活動
+              </span>
+            </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setIsAddModalOpen(true)}
-            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-2xl shadow-sm transition-all flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>單筆上架新卡片</span>
-          </button>
+          <div className="flex items-center gap-2 flex-wrap min-h-[36px]">
+            {duplicateGroups.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setIsDuplicateModalOpen(true)}
+                className="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-xs font-bold rounded-2xl shadow-xs transition-all flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer"
+                title="比對並清理重複情報"
+              >
+                <Copy className="w-3.5 h-3.5 text-amber-600" />
+                <span>比對重複 ({duplicateGroups.length})</span>
+              </button>
+            )}
+
+            {selectedIds.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setIsBatchEditModalOpen(true)}
+                className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-2xl shadow-sm transition-all flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer"
+              >
+                <SlidersHorizontal className="w-4 h-4" />
+                <span>批量編輯 ({selectedIds.length})</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setIsAddModalOpen(true)}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-2xl shadow-sm transition-all flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>單筆上架新卡片</span>
+            </button>
+          </div>
         </div>
 
+        {/* 品牌重複情報提醒橫幅 */}
+        {duplicateGroups.length > 0 && (
+          <div className="mx-5 my-3 p-4 bg-amber-50/80 border border-amber-200/90 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-amber-950 shadow-2xs animate-in fade-in">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-amber-500 text-white font-bold flex-shrink-0 shadow-xs">
+                <Copy className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-xs font-black text-slate-900">
+                    偵測到【{brandName}】有 {duplicateGroups.length} 組可能重複的優惠情報
+                  </h4>
+                  <span className="px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 text-[10px] font-black">
+                    小編建議處理
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600 mt-0.5">
+                  點擊開啟並排比對視窗，可直接選擇保留最完整的一筆並自動下架重複項目
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsDuplicateModalOpen(true)}
+              className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-black rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 flex-shrink-0"
+            >
+              <span>比對並清理 ({duplicateGroups.length})</span>
+            </button>
+          </div>
+        )}
+
         <div className="divide-y divide-slate-100">
-          {deals.length === 0 ? (
+          {paginatedDeals.length === 0 ? (
             <div className="py-16 text-center text-slate-400 space-y-3">
               <Store className="w-10 h-10 mx-auto text-slate-300" />
               <p className="text-xs font-semibold">目前尚未發布任何【{brandName}】的特惠情報</p>
@@ -219,83 +425,219 @@ export const MerchantBrandDealsManager: React.FC<MerchantBrandDealsManagerProps>
               </button>
             </div>
           ) : (
-            deals.map((deal) => (
-              <div key={deal.id} className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors">
-                <div className="flex items-start sm:items-center gap-3.5 min-w-0">
-                  {deal.imageUrl ? (
-                    <div className="w-16 h-16 rounded-2xl overflow-hidden bg-slate-100 relative flex-shrink-0 border border-slate-100">
-                      <Image src={deal.imageUrl} alt={deal.title} fill className="object-cover" />
-                    </div>
-                  ) : (
-                    <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 flex-shrink-0">
-                      <Tag className="w-6 h-6" />
-                    </div>
-                  )}
+            paginatedDeals.map((deal) => {
+              const isSelected = selectedIds.includes(deal.id);
+              return (
+                <div 
+                  key={deal.id} 
+                  className={`p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors ${
+                    isSelected ? 'bg-emerald-50/40 hover:bg-emerald-50/60' : 'hover:bg-slate-50/50'
+                  }`}
+                >
+                  <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+                    {/* Checkbox */}
+                    <button
+                      type="button"
+                      onClick={() => handleToggleSelect(deal.id)}
+                      className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer flex items-center justify-center flex-shrink-0 mt-1 sm:mt-0"
+                    >
+                      {isSelected ? (
+                        <CheckSquare className="w-5 h-5 text-emerald-600" />
+                      ) : (
+                        <Square className="w-5 h-5 text-slate-300 hover:text-slate-500" />
+                      )}
+                    </button>
 
-                  <div className="space-y-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-bold text-slate-900 text-sm truncate">{deal.title}</h4>
-                      {deal.isHot && (
-                        <span className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 text-[10px] font-extrabold border border-rose-200 flex items-center gap-0.5">
-                          <Flame className="w-3 h-3 text-rose-500" />
-                          <span>熱門推薦</span>
+                    {deal.imageUrl ? (
+                      <div className="w-16 h-16 rounded-2xl overflow-hidden bg-slate-100 relative flex-shrink-0 border border-slate-100">
+                        <Image src={deal.imageUrl} alt={deal.title} fill className="object-cover" />
+                      </div>
+                    ) : (
+                      <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 flex-shrink-0">
+                        <Tag className="w-6 h-6" />
+                      </div>
+                    )}
+
+                    <div className="space-y-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-bold text-slate-900 text-sm truncate">{deal.title}</h4>
+                        {deal.isHot && (
+                          <span className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 text-[10px] font-extrabold border border-rose-200 flex items-center gap-0.5">
+                            <Flame className="w-3 h-3 text-rose-500" />
+                            <span>熱門推薦</span>
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                        <span className="font-black text-rose-600 text-sm">
+                          特價 NT$ {deal.discountPrice}
                         </span>
-                      )}
+                        {deal.originalPrice && (
+                          <span className="text-slate-400 line-through text-[11px]">
+                            NT$ {deal.originalPrice}
+                          </span>
+                        )}
+                        <span className="text-slate-400">·</span>
+                        <span className="text-slate-600">{deal.targetItems.join(', ')}</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 line-clamp-1">
+                        條件：{deal.conditions.join(' · ')}
+                      </p>
                     </div>
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                      <span className="font-black text-rose-600 text-sm">
-                        特價 NT$ {deal.discountPrice}
-                      </span>
-                      {deal.originalPrice && (
-                        <span className="text-slate-400 line-through text-[11px]">
-                          NT$ {deal.originalPrice}
-                        </span>
-                      )}
-                      <span className="text-slate-400">·</span>
-                      <span className="text-slate-600">{deal.targetItems.join(', ')}</span>
-                    </div>
-                    <p className="text-[11px] text-slate-400 line-clamp-1">
-                      條件：{deal.conditions.join(' · ')}
-                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 flex-shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleHot(deal.id)}
+                      className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                        deal.isHot
+                          ? 'bg-rose-50 text-rose-700 border-rose-200'
+                          : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      {deal.isHot ? '🔥 主打中' : '設為主打'}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setEditingDeal(deal)}
+                      className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all cursor-pointer"
+                      title="編輯情報"
+                    >
+                      <Edit3 className="w-4 h-4" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(deal.id, deal.title)}
+                      className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 transition-all cursor-pointer"
+                      title="下架情報"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
-
-                <div className="flex items-center justify-end gap-2 flex-shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
-                  <button
-                    type="button"
-                    onClick={() => handleToggleHot(deal.id)}
-                    className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                      deal.isHot
-                        ? 'bg-rose-50 text-rose-700 border-rose-200'
-                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    {deal.isHot ? '🔥 主打中' : '設為主打'}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setEditingDeal(deal)}
-                    className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all cursor-pointer"
-                    title="編輯情報"
-                  >
-                    <Edit3 className="w-4 h-4" />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(deal.id, deal.title)}
-                    className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 transition-all cursor-pointer"
-                    title="下架情報"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
+
+        {/* 分頁控制導覽列 */}
+        <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+          {/* 左側：顯示目前筆數範圍 */}
+          <div className="text-slate-500 font-medium">
+            顯示第 <span className="font-bold text-slate-800">{totalItems === 0 ? 0 : startIndex + 1}</span> - <span className="font-bold text-slate-800">{endIndex}</span> 筆，共 <span className="font-bold text-slate-900">{totalItems}</span> 筆
+          </div>
+
+          {/* 中間：換頁按鈕組 */}
+          {totalPages > 1 && (
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                disabled={validCurrentPage === 1}
+                onClick={() => {
+                  triggerHaptic('light');
+                  setCurrentPage(1);
+                }}
+                className="p-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-white text-slate-600 cursor-pointer disabled:cursor-not-allowed transition-all"
+                title="第一頁"
+              >
+                <ChevronsLeft className="w-4 h-4" />
+              </button>
+
+              <button
+                type="button"
+                disabled={validCurrentPage === 1}
+                onClick={() => {
+                  triggerHaptic('light');
+                  setCurrentPage((p) => Math.max(1, p - 1));
+                }}
+                className="p-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-white text-slate-600 cursor-pointer disabled:cursor-not-allowed transition-all"
+                title="上一頁"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+
+              <div className="flex items-center gap-1 px-1">
+                {pageNumbers.map((p, idx) => {
+                  if (p === '...') {
+                    return (
+                      <span key={`ellipsis-${idx}`} className="px-1 text-slate-400 font-bold">
+                        ...
+                      </span>
+                    );
+                  }
+                  const pageNum = Number(p);
+                  const isActive = pageNum === validCurrentPage;
+                  return (
+                    <button
+                      key={pageNum}
+                      type="button"
+                      onClick={() => {
+                        triggerHaptic('light');
+                        setCurrentPage(pageNum);
+                      }}
+                      className={`w-8 h-8 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center ${
+                        isActive
+                          ? 'bg-emerald-600 text-white shadow-xs scale-105'
+                          : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button
+                type="button"
+                disabled={validCurrentPage === totalPages}
+                onClick={() => {
+                  triggerHaptic('light');
+                  setCurrentPage((p) => Math.min(totalPages, p + 1));
+                }}
+                className="p-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-white text-slate-600 cursor-pointer disabled:cursor-not-allowed transition-all"
+                title="下一頁"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+
+              <button
+                type="button"
+                disabled={validCurrentPage === totalPages}
+                onClick={() => {
+                  triggerHaptic('light');
+                  setCurrentPage(totalPages);
+                }}
+                className="p-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-white text-slate-600 cursor-pointer disabled:cursor-not-allowed transition-all"
+                title="最後一頁"
+              >
+                <ChevronsRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {/* 右側：每頁顯示筆數選擇器 */}
+          <div className="flex items-center gap-2">
+            <span className="text-slate-500 font-medium whitespace-nowrap">每頁顯示：</span>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              className="px-2.5 py-1.5 bg-white font-bold text-slate-800 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-500 shadow-2xs cursor-pointer"
+            >
+              <option value={20}>20 筆 / 頁</option>
+              <option value={50}>50 筆 / 頁</option>
+              <option value={100}>100 筆 / 頁</option>
+              <option value={999999}>全部顯示</option>
+            </select>
+          </div>
+        </div>
       </div>
+
 
       {/* 編輯 Modal */}
       {editingDeal && (
@@ -645,6 +987,94 @@ export const MerchantBrandDealsManager: React.FC<MerchantBrandDealsManagerProps>
           </div>
         </div>
       )}
+
+      {/* 批量編輯 Modal */}
+      <BatchEditModal
+        isOpen={isBatchEditModalOpen}
+        onClose={() => setIsBatchEditModalOpen(false)}
+        selectedIds={selectedIds}
+        selectedDeals={deals.filter((d) => selectedIds.includes(d.id))}
+        isAdmin={false}
+        onSuccess={handleBatchEditSuccess}
+      />
+
+      {/* 重複情報比對與清理 Modal */}
+      <DuplicateDealsModal
+        isOpen={isDuplicateModalOpen}
+        onClose={() => setIsDuplicateModalOpen(false)}
+        duplicateGroups={duplicateGroups}
+        onResolved={(keptDeal, deletedIds, message) => {
+          const deletedSet = new Set(deletedIds);
+          setDeals((prev) => 
+            prev
+              .filter((d) => !deletedSet.has(d.id))
+              .map((d) => (d.id === keptDeal.id ? keptDeal : d))
+          );
+          setSelectedIds((prev) => prev.filter((id) => !deletedSet.has(id)));
+          showFeedback(message);
+          onDealsChange?.();
+        }}
+      />
+
+      {/* 底部浮動批量操作工具列 (Floating Batch Bar) */}
+      {selectedIds.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-900/95 text-white backdrop-blur-md px-5 py-3 rounded-2xl shadow-2xl border border-slate-700/80 flex flex-wrap items-center gap-3 animate-in slide-in-from-bottom-5 duration-200 max-w-[92vw]">
+          <div className="flex items-center gap-2 border-r border-slate-700 pr-3">
+            <span className="text-xs font-bold text-slate-300">已選取</span>
+            <span className="px-2 py-0.5 rounded-full bg-emerald-500 text-white font-black text-xs">
+              {selectedIds.length}
+            </span>
+            <span className="text-xs font-bold text-slate-300">筆情報</span>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setIsBatchEditModalOpen(true)}
+              className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-900 text-xs font-extrabold rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5 text-slate-700" />
+              <span>批量編輯</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleBatchToggleHot(true)}
+              className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-extrabold rounded-xl shadow-xs transition-all flex items-center gap-1 cursor-pointer active:scale-95"
+            >
+              <Flame className="w-3.5 h-3.5" />
+              <span>設為熱門主打</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleBatchToggleHot(false)}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-extrabold rounded-xl transition-all flex items-center gap-1 cursor-pointer active:scale-95 border border-slate-700"
+            >
+              <span>取消主打</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleBatchDelete}
+              className="px-3 py-1.5 bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-800/60 text-xs font-extrabold rounded-xl transition-all flex items-center gap-1 cursor-pointer active:scale-95"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>批量下架</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSelectedIds([])}
+              className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white rounded-xl transition-colors cursor-pointer ml-1"
+              title="取消選取"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+

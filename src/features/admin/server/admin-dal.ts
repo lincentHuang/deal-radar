@@ -191,19 +191,22 @@ export async function getCrawlerLogs(): Promise<CrawlerJobLog[]> {
   return inMemoryLogs;
 }
 
+import { prisma } from '@/shared/lib/prisma';
+
 export async function getAdminDashboardStats(): Promise<AdminStats> {
   const deals = await getDeals();
   const hotCount = deals.filter((d) => d.isHot).length;
   const flashCount = deals.filter((d) => d.isFlashDeal).length;
   const uniqueMerchants = new Set(deals.map((d) => d.merchant.name)).size;
   const enabledCount = inMemoryTargets.filter((t) => t.enabled).length;
+  const activeCampaignsCount = await prisma.adCampaign.count({ where: { status: 'active' } }).catch(() => 0);
 
   return {
     totalDeals: deals.length,
     hotDeals: hotCount,
     flashDeals: flashCount,
     totalMerchants: uniqueMerchants,
-    activeCampaigns: 4,
+    activeCampaigns: activeCampaignsCount,
     crawlerTargetsCount: inMemoryTargets.length,
     enabledTargetsCount: enabledCount,
   };

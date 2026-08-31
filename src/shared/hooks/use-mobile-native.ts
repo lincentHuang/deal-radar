@@ -16,7 +16,7 @@ export function useMobileNative() {
   }, []);
 
   // 原生觸覺反饋 (Haptics Vibration with Web Fallback)
-  const triggerHaptic = useCallback((type: 'light' | 'medium' | 'success' | 'warning' = 'light') => {
+  const triggerHaptic = useCallback((type: 'light' | 'medium' | 'success' | 'warning' | 'error' = 'light') => {
     if (typeof window === 'undefined') return;
 
     try {
@@ -33,6 +33,9 @@ export function useMobileNative() {
             break;
           case 'warning':
             navigator.vibrate([30, 40, 30]);
+            break;
+          case 'error':
+            navigator.vibrate([50, 50, 50]);
             break;
         }
       }

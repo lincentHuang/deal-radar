@@ -4,7 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { useAtom } from 'jotai';
 import * as Dialog from '@radix-ui/react-dialog';
 import Link from 'next/link';
-import { activeDealDetailAtom, subscribedTagsAtom } from '@/features/subscriptions/atoms/subscription-atoms';
+import { activeDealDetailAtom, subscribedTagsAtom, bookmarkedDealIdsAtom } from '@/features/subscriptions/atoms/subscription-atoms';
+import { useAuth } from '@/features/auth/hooks/use-auth';
 import { calculateDiscount, formatPrice, formatRemainingTime } from '@/shared/lib/utils';
 import { BubbleBadge } from '@/shared/components/ui/bubble-badge';
 import { BubbleButton } from '@/shared/components/ui/bubble-button';
@@ -34,14 +35,17 @@ import {
   ZoomIn,
   Image as ImageIcon,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Bookmark
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useMobileNative } from '@/shared/hooks/use-mobile-native';
 
 export const DealDetailModal: React.FC = () => {
   const [activeDeal, setActiveDeal] = useAtom(activeDealDetailAtom);
-  const [subscribedTags, setSubscribedTags] = useAtom(subscribedTagsAtom);
+  const [subscribedTags] = useAtom(subscribedTagsAtom);
+  const [bookmarkedDealIds] = useAtom(bookmarkedDealIdsAtom);
+  const { toggleBookmark, updateTags } = useAuth();
   const [showQrVoucher, setShowQrVoucher] = useState<boolean>(false);
   const [copiedUrl, setCopiedUrl] = useState<boolean>(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number>(0);
@@ -114,11 +118,12 @@ export const DealDetailModal: React.FC = () => {
     alert('🎉 已複製特惠情報與來源連結！');
   };
 
-  const handleToggleTag = (tag: string) => {
+  const handleToggleTag = async (tag: string) => {
     const isSubscribed = subscribedTags.includes(tag);
     if (isSubscribed) {
       triggerHaptic('light');
-      setSubscribedTags(subscribedTags.filter((t) => t !== tag));
+      const newTags = subscribedTags.filter((t) => t !== tag);
+      await updateTags(newTags);
     } else {
       triggerHaptic('success');
       try {
@@ -128,11 +133,12 @@ export const DealDetailModal: React.FC = () => {
           origin: { y: 0.5 },
         });
       } catch (e) {}
-      setSubscribedTags([...subscribedTags, tag]);
+      const newTags = [...subscribedTags, tag];
+      await updateTags(newTags);
     }
   };
 
-  const handleSubscribeAllTags = () => {
+  const handleSubscribeAllTags = async () => {
     triggerHaptic('success');
     try {
       confetti({
@@ -142,7 +148,7 @@ export const DealDetailModal: React.FC = () => {
       });
     } catch (e) {}
     const newTags = Array.from(new Set([...subscribedTags, ...activeDeal.tags]));
-    setSubscribedTags(newTags);
+    await updateTags(newTags);
     alert('🔔 已成功追蹤此優惠的所有關鍵標籤至上方導覽列！');
   };
 
@@ -596,7 +602,18 @@ export const DealDetailModal: React.FC = () => {
 
               {/* 底部功能按鈕 */}
               <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-slate-100">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <BubbleButton
+                    type="button"
+                    variant={bookmarkedDealIds.includes(activeDeal.id) ? "secondary" : "outline"}
+                    size="md"
+                    leftIcon={<Bookmark className={`w-4 h-4 ${bookmarkedDealIds.includes(activeDeal.id) ? 'fill-rose-500 text-rose-500' : 'text-rose-500'}`} />}
+                    onClick={async () => {
+                      await toggleBookmark(activeDeal.id);
+                    }}
+                  >
+                    {bookmarkedDealIds.includes(activeDeal.id) ? '已收藏' : '收藏情報'}
+                  </BubbleButton>
                   <BubbleButton
                     type="button"
                     variant="outline"

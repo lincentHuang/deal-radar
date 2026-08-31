@@ -2,22 +2,120 @@ import 'server-only';
 import { SmartDeal, DealFilterState } from '@/features/deals/types/deal.types';
 import { INITIAL_SMART_DEALS } from '@/features/deals/server/deals-mock-data';
 import { MerchantCreateDealInput } from '@/features/deals/schemas/deal.schema';
+import { prisma } from '@/shared/lib/prisma';
 
-// 記憶體中的全域資料庫快取 (支援即時新增與查詢)
-let inMemoryDeals: SmartDeal[] = [...INITIAL_SMART_DEALS];
+// 將 Prisma Deal 資料模型轉換為前端統一的 SmartDeal 型別契約
+function mapDbDealToSmartDeal(record: any): SmartDeal {
+  return {
+    id: record.id,
+    title: record.title,
+    subtitle: record.subtitle ?? undefined,
+    category: record.category as any,
+    channelType: record.channelType as any,
+    merchant: {
+      name: record.merchantName,
+      logo: record.merchantLogo ?? undefined,
+      storeBranches: record.storeBranches ?? undefined,
+    },
+    regions: record.regions ?? [],
+    originalPrice: record.originalPrice ?? undefined,
+    discountPrice: record.discountPrice ?? undefined,
+    priceUnit: record.priceUnit ?? undefined,
+    targetItems: record.targetItems ?? [],
+    conditions: record.conditions ?? [],
+    eligibleCards: record.eligibleCards ?? [],
+    tags: record.tags ?? [],
+    startDate: record.startDate,
+    endDate: record.endDate,
+    isHot: record.isHot,
+    isFlashDeal: record.isFlashDeal,
+    source: record.source as any,
+    sourcePlatform: record.sourcePlatform as any,
+    sourceUrl: record.sourceUrl ?? undefined,
+    likeCount: record.likeCount ?? 0,
+    commentCount: record.commentCount ?? 0,
+    priceHistory: record.priceHistory as any,
+    priceDropAlert: record.priceDropAlert as any,
+    imageUrl: record.imageUrl ?? undefined,
+    images: record.images && record.images.length > 0 ? record.images : (record.imageUrl ? [record.imageUrl] : []),
+    aspectRatio: record.aspectRatio as any,
+  };
+}
 
+let isSeeding = false;
+
+/**
+ * 確保遠端資料庫具備基礎特惠情報（若資料庫為空，自動寫入 87 筆初始情報）
+ */
+async function ensureDealsSeeded(): Promise<void> {
+  if (isSeeding) return;
+  try {
+    const count = await prisma.deal.count();
+    if (count === 0) {
+      isSeeding = true;
+      console.log('[Deals-DAL] 📦 Remote database is empty. Auto-seeding initial deals...');
+      const data = INITIAL_SMART_DEALS.map((deal) => ({
+        id: deal.id,
+        title: deal.title,
+        subtitle: deal.subtitle || null,
+        category: deal.category,
+        channelType: deal.channelType,
+        merchantName: deal.merchant.name,
+        merchantLogo: deal.merchant.logo || null,
+        storeBranches: deal.merchant.storeBranches || null,
+        regions: deal.regions || [],
+        originalPrice: deal.originalPrice || null,
+        discountPrice: deal.discountPrice || null,
+        priceUnit: deal.priceUnit || '元',
+        targetItems: deal.targetItems || [],
+        conditions: deal.conditions || [],
+        eligibleCards: deal.eligibleCards || [],
+        tags: deal.tags || [],
+        startDate: deal.startDate,
+        endDate: deal.endDate,
+        isHot: Boolean(deal.isHot),
+        isFlashDeal: Boolean(deal.isFlashDeal),
+        source: deal.source || 'official',
+        sourcePlatform: deal.sourcePlatform || null,
+        sourceUrl: deal.sourceUrl || null,
+        likeCount: deal.likeCount || 0,
+        commentCount: deal.commentCount || 0,
+        priceHistory: deal.priceHistory ? (deal.priceHistory as any) : undefined,
+        priceDropAlert: deal.priceDropAlert ? (deal.priceDropAlert as any) : undefined,
+        imageUrl: deal.imageUrl || null,
+        images: deal.images || (deal.imageUrl ? [deal.imageUrl] : []),
+        aspectRatio: deal.aspectRatio || null,
+      }));
+
+      await prisma.deal.createMany({
+        data,
+        skipDuplicates: true,
+      });
+      console.log(`[Deals-DAL] ✅ Successfully seeded ${data.length} deals into remote Neon PostgreSQL.`);
+    }
+  } catch (err) {
+    console.error('[Deals-DAL] ⚠️ ensureDealsSeeded error:', err);
+  } finally {
+    isSeeding = false;
+  }
+}
+
+/**
+ * 依據篩選條件自遠端資料庫查詢特價情報
+ */
 export async function getDeals(filters?: Partial<DealFilterState>): Promise<SmartDeal[]> {
-  // 自動清理過期活動
-  purgeExpiredDeals();
+  await ensureDealsSeeded();
+  await purgeExpiredDeals();
 
-  // 模擬微延遲
-  await new Promise((resolve) => setTimeout(resolve, 30));
+  const records = await prisma.deal.findMany({
+    orderBy: { createdAt: 'desc' },
+  });
 
-  let results = [...inMemoryDeals];
+  let results = records.map(mapDbDealToSmartDeal);
 
   if (!filters) return results;
 
-  // 1. 搜尋關鍵字過濾 (標題、店家、品項、條件、標籤)
+  // 1. 搜尋關鍵字過濾 (標題、店家、品項、條件、標籤、卡片)
   if (filters.searchQuery && filters.searchQuery.trim() !== '') {
     const q = filters.searchQuery.toLowerCase().trim();
     results = results.filter((deal) => {
@@ -110,7 +208,6 @@ export async function getDeals(filters?: Partial<DealFilterState>): Promise<Smar
   if (filters.sortBy) {
     switch (filters.sortBy) {
       case 'discount': {
-        // 最大降價 / 最大降幅：打折比例（折扣率）最高的排在最前面（變得越便宜在越前面）
         const getDiscountRate = (deal: SmartDeal): number => {
           if (
             deal.originalPrice &&
@@ -127,12 +224,10 @@ export async function getDeals(filters?: Partial<DealFilterState>): Promise<Smar
           const rateA = getDiscountRate(a);
           const rateB = getDiscountRate(b);
 
-          // 1. 打折比例最高的優先（例如 5 折 / 0.5 > 7 折 / 0.3 > 0）
           if (Math.abs(rateB - rateA) > 0.0001) {
             return rateB - rateA;
           }
 
-          // 2. 折扣比例相同時，現省金額較大者優先
           const savedA = (a.originalPrice && a.discountPrice && a.originalPrice > a.discountPrice)
             ? a.originalPrice - a.discountPrice
             : 0;
@@ -143,13 +238,11 @@ export async function getDeals(filters?: Partial<DealFilterState>): Promise<Smar
             return savedB - savedA;
           }
 
-          // 3. 次要排序：最新開始優先
           return new Date(b.startDate).getTime() - new Date(a.startDate).getTime();
         });
         break;
       }
       case 'expiring': {
-        // 即將截止：排除無有效日期、已截止（過期）以及「即將開跑 (尚未開始)」的項目，僅保留快要到期的特惠
         const now = Date.now();
 
         const parseEndTime = (dateStr?: string): number | null => {
@@ -166,18 +259,16 @@ export async function getDeals(filters?: Partial<DealFilterState>): Promise<Smar
           return isNaN(t) ? null : t;
         };
 
-        // 過濾出符合「進行中且尚未過期」的情報
         results = results.filter((deal) => {
           const end = parseEndTime(deal.endDate);
-          if (end === null || end < now) return false; // 無有效截止日期或已截止
+          if (end === null || end < now) return false;
 
           const start = parseStartTime(deal.startDate);
-          if (start !== null && start > now) return false; // 即將開跑（尚未開始）
+          if (start !== null && start > now) return false;
 
           return true;
         });
 
-        // 依剩餘時間升冪排序（越快到期排越前）
         results.sort((a, b) => {
           const endA = parseEndTime(a.endDate) ?? Infinity;
           const endB = parseEndTime(b.endDate) ?? Infinity;
@@ -201,24 +292,30 @@ export async function getDeals(filters?: Partial<DealFilterState>): Promise<Smar
   return results;
 }
 
+/**
+ * 依 ID 取得單筆特價卡片
+ */
 export async function getDealById(id: string): Promise<SmartDeal | null> {
-  const found = inMemoryDeals.find((d) => d.id === id);
-  return found || null;
+  await ensureDealsSeeded();
+  const record = await prisma.deal.findUnique({ where: { id } });
+  return record ? mapDbDealToSmartDeal(record) : null;
 }
 
+/**
+ * 商家發布新特價活動 (寫入遠端資料庫)
+ */
 export async function createDeal(input: MerchantCreateDealInput): Promise<SmartDeal> {
-  const newDeal: SmartDeal = {
+  const newDealData = {
     id: `deal-merchant-${Date.now()}`,
     title: input.title,
     category: input.category,
     channelType: input.channelType,
-    merchant: {
-      name: input.merchantName,
-      storeBranches: input.district ? `${input.city} ${input.district} 門市` : `${input.city} 指定門市`,
-    },
+    merchantName: input.merchantName,
+    merchantLogo: null,
+    storeBranches: input.district ? `${input.city} ${input.district} 門市` : `${input.city} 指定門市`,
     regions: [input.city, input.district ? `${input.city} / ${input.district}` : input.city],
-    originalPrice: input.originalPrice,
-    discountPrice: input.discountPrice,
+    originalPrice: input.originalPrice ?? null,
+    discountPrice: input.discountPrice ?? null,
     priceUnit: '份',
     targetItems: input.targetItems.split(/[,，、]/).map((s) => s.trim()).filter(Boolean),
     conditions: input.conditions.split(/[,，、\n]/).map((s) => s.trim()).filter(Boolean),
@@ -226,8 +323,8 @@ export async function createDeal(input: MerchantCreateDealInput): Promise<SmartD
     tags: input.tags 
       ? input.tags.split(/[,，、\s]/).map((t) => t.startsWith('#') ? t : `#${t}`).filter((t) => t !== '#')
       : [`#${input.merchantName}`, `#特價`],
-    startDate: new Date(input.startDate).toISOString(),
-    endDate: new Date(input.endDate).toISOString(),
+    startDate: new Date(input.startDate).toISOString().split('T')[0],
+    endDate: new Date(input.endDate).toISOString().split('T')[0],
     isHot: true,
     isFlashDeal: true,
     source: 'merchant_post',
@@ -244,20 +341,27 @@ export async function createDeal(input: MerchantCreateDealInput): Promise<SmartD
       note: '店家自主官方發布破盤特惠！',
     },
     imageUrl: input.imageUrl || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&auto=format&fit=crop&q=80',
-    aspectRatio: input.aspectRatio || undefined,
+    images: [input.imageUrl || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&auto=format&fit=crop&q=80'],
+    aspectRatio: input.aspectRatio || null,
   };
 
-  inMemoryDeals = [newDeal, ...inMemoryDeals];
-  return newDeal;
+  const created = await prisma.deal.create({
+    data: newDealData,
+  });
+
+  return mapDbDealToSmartDeal(created);
 }
 
+/**
+ * 核銷優惠券代碼
+ */
 export async function redeemVoucher(voucherCode: string, dealId: string): Promise<{
   success: boolean;
   message: string;
   dealTitle?: string;
   redeemedAt: string;
 }> {
-  const deal = inMemoryDeals.find((d) => d.id === dealId);
+  const deal = await prisma.deal.findUnique({ where: { id: dealId } });
   if (!deal) {
     return {
       success: false,
@@ -284,39 +388,55 @@ export async function redeemVoucher(voucherCode: string, dealId: string): Promis
 }
 
 /**
- * 自動清理所有已過期特惠活動 (endDate < 今日)
+ * 自動清理遠端資料庫中已過期的特惠活動 (endDate < 今日)
  */
-export function purgeExpiredDeals(): number {
-  const now = Date.now();
-  const initialLength = inMemoryDeals.length;
+export async function purgeExpiredDeals(): Promise<number> {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const expiredRecords = await prisma.deal.findMany({
+      where: {
+        endDate: {
+          lt: today,
+          not: '',
+        },
+      },
+    });
 
-  inMemoryDeals = inMemoryDeals.filter((deal) => {
-    if (!deal.endDate) return true; // 若無明確結束日期視為長期常態保留
-    const fullEndStr = deal.endDate.includes('T') ? deal.endDate : `${deal.endDate}T23:59:59`;
-    const endTime = new Date(fullEndStr).getTime();
-    if (isNaN(endTime)) return true;
-    return endTime >= now; // 僅保留尚未過期的活動
-  });
-
-  const removedCount = initialLength - inMemoryDeals.length;
-  if (removedCount > 0) {
-    console.log(`[Deals-DAL] 🧹 Auto-purged ${removedCount} expired deals. Current active deals: ${inMemoryDeals.length}`);
+    if (expiredRecords.length > 0) {
+      const expiredIds = expiredRecords.map((r) => r.id);
+      const deleteRes = await prisma.deal.deleteMany({
+        where: { id: { in: expiredIds } },
+      });
+      console.log(`[Deals-DAL] 🧹 Purged ${deleteRes.count} expired deals from remote database.`);
+      return deleteRes.count;
+    }
+    return 0;
+  } catch (err) {
+    console.error('[Deals-DAL] ⚠️ purgeExpiredDeals error:', err);
+    return 0;
   }
-  return removedCount;
 }
 
 /**
- * 批次寫入或更新爬蟲爬取的特價情報 (去重並前置新增，同時自動清除過期活動)
+ * 批次寫入或更新爬蟲爬取的特價情報 (遠端資料庫 upsert 去重)
  */
-export async function upsertCrawledDeals(crawledDeals: SmartDeal[]): Promise<{ insertedCount: number; totalCount: number; purgedCount: number }> {
-  // 1. 先執行過期自動清理
-  const purgedCount = purgeExpiredDeals();
+export async function upsertCrawledDeals(crawledDeals: SmartDeal[]): Promise<{
+  insertedCount: number;
+  updatedCount: number;
+  totalCount: number;
+  purgedCount: number;
+  createdDeals: SmartDeal[];
+  updatedDeals: SmartDeal[];
+}> {
+  const purgedCount = await purgeExpiredDeals();
 
   let insertedCount = 0;
+  let updatedCount = 0;
+  const createdDeals: SmartDeal[] = [];
+  const updatedDeals: SmartDeal[] = [];
   const now = Date.now();
 
   for (const deal of crawledDeals) {
-    // 若抓到的本身已過期則略過
     if (deal.endDate) {
       const fullEndStr = deal.endDate.includes('T') ? deal.endDate : `${deal.endDate}T23:59:59`;
       const endTime = new Date(fullEndStr).getTime();
@@ -325,101 +445,382 @@ export async function upsertCrawledDeals(crawledDeals: SmartDeal[]): Promise<{ i
       }
     }
 
-    // 依據 sourceUrl 或 相似標題去重
-    const existsIndex = inMemoryDeals.findIndex(
-      (d) => (deal.sourceUrl && d.sourceUrl === deal.sourceUrl) || (d.merchant.name === deal.merchant.name && d.title === deal.title)
-    );
+    let existing = null;
+    if (deal.sourceUrl) {
+      existing = await prisma.deal.findFirst({
+        where: { sourceUrl: deal.sourceUrl },
+      });
+    }
+    if (!existing) {
+      existing = await prisma.deal.findFirst({
+        where: {
+          merchantName: deal.merchant.name,
+          title: deal.title,
+        },
+      });
+    }
 
-    if (existsIndex >= 0) {
-      // 更新現有資料
-      inMemoryDeals[existsIndex] = {
-        ...inMemoryDeals[existsIndex],
-        ...deal,
-        id: inMemoryDeals[existsIndex].id, // 保持既有 ID
-      };
+    const dealData = {
+      title: deal.title,
+      subtitle: deal.subtitle || null,
+      category: deal.category,
+      channelType: deal.channelType,
+      merchantName: deal.merchant.name,
+      merchantLogo: deal.merchant.logo || null,
+      storeBranches: deal.merchant.storeBranches || null,
+      regions: deal.regions || [],
+      originalPrice: deal.originalPrice || null,
+      discountPrice: deal.discountPrice || null,
+      priceUnit: deal.priceUnit || '元',
+      targetItems: deal.targetItems || [],
+      conditions: deal.conditions || [],
+      eligibleCards: deal.eligibleCards || [],
+      tags: deal.tags || [],
+      startDate: deal.startDate,
+      endDate: deal.endDate,
+      isHot: Boolean(deal.isHot),
+      isFlashDeal: Boolean(deal.isFlashDeal),
+      source: deal.source || 'official',
+      sourcePlatform: deal.sourcePlatform || null,
+      sourceUrl: deal.sourceUrl || null,
+      likeCount: deal.likeCount || 0,
+      commentCount: deal.commentCount || 0,
+      priceHistory: deal.priceHistory ? (deal.priceHistory as any) : undefined,
+      priceDropAlert: deal.priceDropAlert ? (deal.priceDropAlert as any) : undefined,
+      imageUrl: deal.imageUrl || null,
+      images: deal.images || (deal.imageUrl ? [deal.imageUrl] : []),
+      aspectRatio: deal.aspectRatio || null,
+    };
+
+    if (existing) {
+      const updated = await prisma.deal.update({
+        where: { id: existing.id },
+        data: dealData,
+      });
+      const mapped = mapDbDealToSmartDeal(updated);
+      updatedDeals.push(mapped);
+      updatedCount++;
     } else {
-      // 新增至清單頂部
-      inMemoryDeals = [deal, ...inMemoryDeals];
+      const created = await prisma.deal.create({
+        data: {
+          id: deal.id || `deal-crawled-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          ...dealData,
+        },
+      });
+      const mapped = mapDbDealToSmartDeal(created);
+      createdDeals.push(mapped);
       insertedCount++;
     }
   }
 
+  const totalCount = await prisma.deal.count();
+
   return {
     insertedCount,
-    totalCount: inMemoryDeals.length,
+    updatedCount,
+    totalCount,
     purgedCount,
+    createdDeals,
+    updatedDeals,
   };
 }
 
 /**
- * 更新特價卡片
+ * 更新單筆特價卡片
  */
 export async function updateDeal(id: string, updates: Partial<SmartDeal>): Promise<SmartDeal | null> {
-  const index = inMemoryDeals.findIndex((d) => d.id === id);
-  if (index === -1) return null;
+  const data: any = {};
+  if (updates.title !== undefined) data.title = updates.title;
+  if (updates.subtitle !== undefined) data.subtitle = updates.subtitle;
+  if (updates.category !== undefined) data.category = updates.category;
+  if (updates.channelType !== undefined) data.channelType = updates.channelType;
+  if (updates.merchant?.name !== undefined) data.merchantName = updates.merchant.name;
+  if (updates.merchant?.logo !== undefined) data.merchantLogo = updates.merchant.logo;
+  if (updates.merchant?.storeBranches !== undefined) data.storeBranches = updates.merchant.storeBranches;
+  if (updates.regions !== undefined) data.regions = updates.regions;
+  if (updates.originalPrice !== undefined) data.originalPrice = updates.originalPrice;
+  if (updates.discountPrice !== undefined) data.discountPrice = updates.discountPrice;
+  if (updates.priceUnit !== undefined) data.priceUnit = updates.priceUnit;
+  if (updates.targetItems !== undefined) data.targetItems = updates.targetItems;
+  if (updates.conditions !== undefined) data.conditions = updates.conditions;
+  if (updates.eligibleCards !== undefined) data.eligibleCards = updates.eligibleCards;
+  if (updates.tags !== undefined) data.tags = updates.tags;
+  if (updates.startDate !== undefined) data.startDate = updates.startDate;
+  if (updates.endDate !== undefined) data.endDate = updates.endDate;
+  if (updates.isHot !== undefined) data.isHot = updates.isHot;
+  if (updates.isFlashDeal !== undefined) data.isFlashDeal = updates.isFlashDeal;
+  if (updates.source !== undefined) data.source = updates.source;
+  if (updates.sourcePlatform !== undefined) data.sourcePlatform = updates.sourcePlatform;
+  if (updates.sourceUrl !== undefined) data.sourceUrl = updates.sourceUrl;
+  if (updates.likeCount !== undefined) data.likeCount = updates.likeCount;
+  if (updates.commentCount !== undefined) data.commentCount = updates.commentCount;
+  if (updates.priceHistory !== undefined) data.priceHistory = updates.priceHistory as any;
+  if (updates.priceDropAlert !== undefined) data.priceDropAlert = updates.priceDropAlert as any;
+  if (updates.imageUrl !== undefined) data.imageUrl = updates.imageUrl;
+  if (updates.images !== undefined) data.images = updates.images;
+  if (updates.aspectRatio !== undefined) data.aspectRatio = updates.aspectRatio;
 
-  const current = inMemoryDeals[index];
-  const updated: SmartDeal = {
-    ...current,
-    ...updates,
-    id: current.id, // 保留原 ID
-    merchant: {
-      ...current.merchant,
-      ...(updates.merchant || {}),
-    },
-  };
-
-  inMemoryDeals[index] = updated;
-  return updated;
+  try {
+    const updated = await prisma.deal.update({
+      where: { id },
+      data,
+    });
+    return mapDbDealToSmartDeal(updated);
+  } catch (err) {
+    console.error(`[Deals-DAL] Update deal ${id} failed:`, err);
+    return null;
+  }
 }
 
 /**
  * 刪除特價卡片
  */
 export async function deleteDeal(id: string): Promise<boolean> {
-  const initialLength = inMemoryDeals.length;
-  inMemoryDeals = inMemoryDeals.filter((d) => d.id !== id);
-  return inMemoryDeals.length < initialLength;
+  try {
+    await prisma.deal.delete({ where: { id } });
+    return true;
+  } catch (err) {
+    console.error(`[Deals-DAL] Delete deal ${id} failed:`, err);
+    return false;
+  }
 }
 
 /**
  * 切換熱門狀態 (isHot)
  */
 export async function toggleDealHot(id: string): Promise<SmartDeal | null> {
-  const deal = inMemoryDeals.find((d) => d.id === id);
+  const deal = await prisma.deal.findUnique({ where: { id } });
   if (!deal) return null;
-  deal.isHot = !deal.isHot;
-  return deal;
+  const updated = await prisma.deal.update({
+    where: { id },
+    data: { isHot: !deal.isHot },
+  });
+  return mapDbDealToSmartDeal(updated);
 }
 
 /**
  * 切換破盤快閃狀態 (isFlashDeal)
  */
 export async function toggleDealFlash(id: string): Promise<SmartDeal | null> {
-  const deal = inMemoryDeals.find((d) => d.id === id);
+  const deal = await prisma.deal.findUnique({ where: { id } });
   if (!deal) return null;
-  deal.isFlashDeal = !deal.isFlashDeal;
-  return deal;
+  const updated = await prisma.deal.update({
+    where: { id },
+    data: { isFlashDeal: !deal.isFlashDeal },
+  });
+  return mapDbDealToSmartDeal(updated);
 }
 
 /**
  * 依據品牌名稱查詢該品牌專屬情報
  */
 export async function getDealsByMerchant(merchantName: string): Promise<SmartDeal[]> {
-  purgeExpiredDeals();
+  await ensureDealsSeeded();
   const cleanName = merchantName.toLowerCase().trim();
-  return inMemoryDeals.filter((deal) => 
-    deal.merchant.name.toLowerCase().includes(cleanName) ||
-    cleanName.includes(deal.merchant.name.toLowerCase())
-  );
+  const records = await prisma.deal.findMany({
+    where: {
+      merchantName: {
+        contains: cleanName,
+        mode: 'insensitive',
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+  return records.map(mapDbDealToSmartDeal);
 }
 
 /**
- * 批次新增特惠卡片 (DM 快速製卡批量寫入)
+ * 批次新增特惠卡片 (DM 快速製卡批量寫入遠端資料庫)
  */
 export async function batchCreateSmartDeals(deals: SmartDeal[]): Promise<SmartDeal[]> {
-  inMemoryDeals = [...deals, ...inMemoryDeals];
+  const data = deals.map((deal) => ({
+    id: deal.id || `deal-batch-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    title: deal.title,
+    subtitle: deal.subtitle || null,
+    category: deal.category,
+    channelType: deal.channelType,
+    merchantName: deal.merchant.name,
+    merchantLogo: deal.merchant.logo || null,
+    storeBranches: deal.merchant.storeBranches || null,
+    regions: deal.regions || [],
+    originalPrice: deal.originalPrice || null,
+    discountPrice: deal.discountPrice || null,
+    priceUnit: deal.priceUnit || '元',
+    targetItems: deal.targetItems || [],
+    conditions: deal.conditions || [],
+    eligibleCards: deal.eligibleCards || [],
+    tags: deal.tags || [],
+    startDate: deal.startDate,
+    endDate: deal.endDate,
+    isHot: Boolean(deal.isHot),
+    isFlashDeal: Boolean(deal.isFlashDeal),
+    source: deal.source || 'official',
+    sourcePlatform: deal.sourcePlatform || null,
+    sourceUrl: deal.sourceUrl || null,
+    likeCount: deal.likeCount || 0,
+    commentCount: deal.commentCount || 0,
+    priceHistory: deal.priceHistory ? (deal.priceHistory as any) : undefined,
+    priceDropAlert: deal.priceDropAlert ? (deal.priceDropAlert as any) : undefined,
+    imageUrl: deal.imageUrl || null,
+    images: deal.images || (deal.imageUrl ? [deal.imageUrl] : []),
+    aspectRatio: deal.aspectRatio || null,
+  }));
+
+  await prisma.deal.createMany({
+    data,
+    skipDuplicates: true,
+  });
+
   return deals;
 }
+
+export interface BatchUpdateDealsOptions {
+  category?: string;
+  channelType?: 'offline' | 'online';
+  tagsToAdd?: string[];
+  tagsToRemove?: string[];
+  priceAdjustment?: {
+    type: 'set' | 'discount_percent' | 'discount_amount';
+    value: number;
+  };
+  addConditions?: string[];
+  replaceConditions?: string[];
+  isHot?: boolean;
+  isFlashDeal?: boolean;
+}
+
+/**
+ * 批量更新特價卡片 (遠端資料庫即時更新)
+ */
+export async function batchUpdateDeals(
+  ids: string[],
+  options: BatchUpdateDealsOptions
+): Promise<{ updatedCount: number; updatedDeals: SmartDeal[] }> {
+  const records = await prisma.deal.findMany({
+    where: { id: { in: ids } },
+  });
+
+  const updatedDeals: SmartDeal[] = [];
+
+  for (const record of records) {
+    const deal = mapDbDealToSmartDeal(record);
+    let updatedDeal = { ...deal };
+
+    // 1. 分類修改
+    if (options.category && options.category !== 'keep') {
+      updatedDeal.category = options.category as any;
+    }
+
+    // 2. 通路模式修改
+    if (options.channelType) {
+      updatedDeal.channelType = options.channelType;
+    }
+
+    // 3. 標籤管理 (追加 / 移除)
+    if (options.tagsToAdd && options.tagsToAdd.length > 0) {
+      const currentTags = [...(updatedDeal.tags || [])];
+      for (const t of options.tagsToAdd) {
+        const cleanT = t.trim().startsWith('#') ? t.trim() : `#${t.trim()}`;
+        if (cleanT.length > 1 && !currentTags.some((existing) => existing.toLowerCase() === cleanT.toLowerCase())) {
+          if (currentTags.length < 8) {
+            currentTags.push(cleanT);
+          }
+        }
+      }
+      updatedDeal.tags = currentTags;
+    }
+
+    if (options.tagsToRemove && options.tagsToRemove.length > 0) {
+      const removeSet = new Set(options.tagsToRemove.map((t) => t.toLowerCase().trim()));
+      updatedDeal.tags = (updatedDeal.tags || []).filter(
+        (t) => !removeSet.has(t.toLowerCase().trim()) && !removeSet.has(t.replace(/^#/, '').toLowerCase().trim())
+      );
+    }
+
+    // 4. 價格調整
+    if (options.priceAdjustment && options.priceAdjustment.value > 0) {
+      const { type, value } = options.priceAdjustment;
+      if (type === 'set') {
+        updatedDeal.discountPrice = Math.max(1, Math.round(value));
+      } else if (type === 'discount_percent') {
+        const currentPrice = updatedDeal.discountPrice || updatedDeal.originalPrice || 100;
+        updatedDeal.discountPrice = Math.max(1, Math.round((currentPrice * value) / 100));
+      } else if (type === 'discount_amount') {
+        const currentPrice = updatedDeal.discountPrice || updatedDeal.originalPrice || 100;
+        updatedDeal.discountPrice = Math.max(1, currentPrice - value);
+      }
+    }
+
+    // 5. 促銷條件調整
+    if (options.replaceConditions && options.replaceConditions.length > 0) {
+      updatedDeal.conditions = options.replaceConditions;
+    } else if (options.addConditions && options.addConditions.length > 0) {
+      const existingConditions = new Set(updatedDeal.conditions);
+      options.addConditions.forEach((c) => {
+        if (c.trim()) existingConditions.add(c.trim());
+      });
+      updatedDeal.conditions = Array.from(existingConditions);
+    }
+
+    // 6. 狀態標記
+    if (options.isHot !== undefined) {
+      updatedDeal.isHot = options.isHot;
+    }
+    if (options.isFlashDeal !== undefined) {
+      updatedDeal.isFlashDeal = options.isFlashDeal;
+    }
+
+    await prisma.deal.update({
+      where: { id: record.id },
+      data: {
+        category: updatedDeal.category,
+        channelType: updatedDeal.channelType,
+        tags: updatedDeal.tags,
+        discountPrice: updatedDeal.discountPrice ?? null,
+        conditions: updatedDeal.conditions,
+        isHot: updatedDeal.isHot,
+        isFlashDeal: updatedDeal.isFlashDeal,
+      },
+    });
+
+    updatedDeals.push(updatedDeal);
+  }
+
+  return {
+    updatedCount: updatedDeals.length,
+    updatedDeals,
+  };
+}
+
+/**
+ * 批量刪除特價卡片
+ */
+export async function batchDeleteDeals(ids: string[]): Promise<{ deletedCount: number }> {
+  const res = await prisma.deal.deleteMany({
+    where: { id: { in: ids } },
+  });
+  return { deletedCount: res.count };
+}
+
+/**
+ * 批量設定熱門標記
+ */
+export async function batchToggleHotDeals(
+  ids: string[],
+  isHot: boolean
+): Promise<{ updatedCount: number; updatedDeals: SmartDeal[] }> {
+  return await batchUpdateDeals(ids, { isHot });
+}
+
+/**
+ * 批量設定破盤快閃標記
+ */
+export async function batchToggleFlashDeals(
+  ids: string[],
+  isFlashDeal: boolean
+): Promise<{ updatedCount: number; updatedDeals: SmartDeal[] }> {
+  return await batchUpdateDeals(ids, { isFlashDeal });
+}
+
 
 

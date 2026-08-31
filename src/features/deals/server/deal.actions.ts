@@ -119,3 +119,105 @@ export async function fetchMerchantDealsAction(merchantName: string): Promise<Sm
   return await getDealsByMerchant(merchantName);
 }
 
+export async function batchUpdateDealsAction(
+  ids: string[],
+  options: import('@/features/deals/server/deals-dal').BatchUpdateDealsOptions
+): Promise<{ success: boolean; message: string; updatedCount: number; updatedDeals: SmartDeal[] }> {
+  try {
+    const { batchUpdateDeals } = await import('@/features/deals/server/deals-dal');
+    const result = await batchUpdateDeals(ids, options);
+    revalidatePath('/');
+    revalidatePath('/admin');
+    revalidatePath('/merchant');
+    return {
+      success: true,
+      message: `成功批量更新 ${result.updatedCount} 筆特價卡片！`,
+      updatedCount: result.updatedCount,
+      updatedDeals: result.updatedDeals,
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      message: error.message || '批量更新失敗，請稍後再試',
+      updatedCount: 0,
+      updatedDeals: [],
+    };
+  }
+}
+
+export async function batchDeleteDealsAction(
+  ids: string[]
+): Promise<{ success: boolean; message: string; deletedCount: number }> {
+  try {
+    const { batchDeleteDeals } = await import('@/features/deals/server/deals-dal');
+    const result = await batchDeleteDeals(ids);
+    revalidatePath('/');
+    revalidatePath('/admin');
+    revalidatePath('/merchant');
+    return {
+      success: true,
+      message: `成功批量下架並刪除 ${result.deletedCount} 筆卡片！`,
+      deletedCount: result.deletedCount,
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      message: error.message || '批量刪除失敗，請稍後再試',
+      deletedCount: 0,
+    };
+  }
+}
+
+export async function batchToggleHotDealsAction(
+  ids: string[],
+  isHot: boolean
+): Promise<{ success: boolean; message: string; updatedCount: number; updatedDeals: SmartDeal[] }> {
+  try {
+    const { batchToggleHotDeals } = await import('@/features/deals/server/deals-dal');
+    const result = await batchToggleHotDeals(ids, isHot);
+    revalidatePath('/');
+    revalidatePath('/admin');
+    revalidatePath('/merchant');
+    return {
+      success: true,
+      message: isHot ? `已將 ${result.updatedCount} 筆卡片設為熱門推薦！` : `已取消 ${result.updatedCount} 筆卡片的熱門標記`,
+      updatedCount: result.updatedCount,
+      updatedDeals: result.updatedDeals,
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      message: error.message || '操作失敗',
+      updatedCount: 0,
+      updatedDeals: [],
+    };
+  }
+}
+
+export async function batchToggleFlashDealsAction(
+  ids: string[],
+  isFlashDeal: boolean
+): Promise<{ success: boolean; message: string; updatedCount: number; updatedDeals: SmartDeal[] }> {
+  try {
+    const { batchToggleFlashDeals } = await import('@/features/deals/server/deals-dal');
+    const result = await batchToggleFlashDeals(ids, isFlashDeal);
+    revalidatePath('/');
+    revalidatePath('/admin');
+    revalidatePath('/merchant');
+    return {
+      success: true,
+      message: isFlashDeal ? `已將 ${result.updatedCount} 筆卡片設為破盤快閃！` : `已取消 ${result.updatedCount} 筆卡片的破盤快閃標記`,
+      updatedCount: result.updatedCount,
+      updatedDeals: result.updatedDeals,
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      message: error.message || '操作失敗',
+      updatedCount: 0,
+      updatedDeals: [],
+    };
+  }
+}
+
+

@@ -5,8 +5,10 @@ import {
   CrawlerTargetConfig, 
   CrawlerScheduleConfig, 
   CrawlerJobLog, 
-  CrawlerScheduleMode 
+  CrawlerScheduleMode,
+  CrawlerExecutionResult
 } from '../types/admin.types';
+import { CrawlerResultModal } from './crawler-result-modal';
 import { 
   updateCrawlerTargetAction, 
   updateCrawlerScheduleAction, 
@@ -48,6 +50,7 @@ interface AdminCrawlerSchedulerProps {
   initialSchedule: CrawlerScheduleConfig;
   initialLogs: CrawlerJobLog[];
   onRefresh?: () => void;
+  onViewDealsTab?: () => void;
 }
 
 export const AdminCrawlerScheduler: React.FC<AdminCrawlerSchedulerProps> = ({
@@ -55,6 +58,7 @@ export const AdminCrawlerScheduler: React.FC<AdminCrawlerSchedulerProps> = ({
   initialSchedule,
   initialLogs,
   onRefresh,
+  onViewDealsTab,
 }) => {
   const [targets, setTargets] = useState<CrawlerTargetConfig[]>(initialTargets);
   const [schedule, setSchedule] = useState<CrawlerScheduleConfig>(initialSchedule);
@@ -65,10 +69,13 @@ export const AdminCrawlerScheduler: React.FC<AdminCrawlerSchedulerProps> = ({
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [runningTargetId, setRunningTargetId] = useState<string | null>(null);
   const [extractedPreviewDeals, setExtractedPreviewDeals] = useState<SmartDeal[]>([]);
+  const [crawlerExecutionResult, setCrawlerExecutionResult] = useState<CrawlerExecutionResult | null>(null);
+  const [isResultModalOpen, setIsResultModalOpen] = useState<boolean>(false);
   const [feedback, setFeedback] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [isAddTargetModalOpen, setIsAddTargetModalOpen] = useState<boolean>(false);
   const [editingTarget, setEditingTarget] = useState<CrawlerTargetConfig | null>(null);
   const [isBatchScheduleModalOpen, setIsBatchScheduleModalOpen] = useState<boolean>(false);
+
 
   // 批量排程設定表單狀態
   const [batchScheduleMode, setBatchScheduleMode] = useState<CrawlerScheduleMode>('inherit');
@@ -240,8 +247,11 @@ export const AdminCrawlerScheduler: React.FC<AdminCrawlerSchedulerProps> = ({
     try {
       const res = await triggerManualCrawlAction(targetIds);
       if (res.success) {
+        triggerHaptic('success');
         showFeedback(res.message);
-        setExtractedPreviewDeals(res.crawledDeals);
+        setExtractedPreviewDeals(res.createdDeals || []);
+        setCrawlerExecutionResult(res);
+        setIsResultModalOpen(true);
         setLogs((prev) => [
           {
             id: `log-${Date.now()}`,
@@ -251,7 +261,7 @@ export const AdminCrawlerScheduler: React.FC<AdminCrawlerSchedulerProps> = ({
               : targetIds ? targets.find((t) => t.id === targetIds)?.name : '全站站點',
             type: 'manual',
             status: 'success',
-            crawledCount: res.crawledDeals.length,
+            crawledCount: res.crawledCount,
             insertedCount: res.insertedCount,
             message: res.message,
           },
@@ -259,9 +269,11 @@ export const AdminCrawlerScheduler: React.FC<AdminCrawlerSchedulerProps> = ({
         ]);
         onRefresh?.();
       } else {
+        triggerHaptic('warning');
         showFeedback(res.message, 'error');
       }
     } catch (err: any) {
+      triggerHaptic('warning');
       showFeedback(err.message || '抓取失敗', 'error');
     } finally {
       setIsRunning(false);
@@ -950,6 +962,16 @@ export const AdminCrawlerScheduler: React.FC<AdminCrawlerSchedulerProps> = ({
           </div>
         </div>
       )}
+
+      {/* 彈窗 4：爬蟲完成成果與新建立卡片報告 Modal */}
+      <CrawlerResultModal
+        isOpen={isResultModalOpen}
+        onClose={() => setIsResultModalOpen(false)}
+        result={crawlerExecutionResult}
+        onViewDealsTab={onViewDealsTab}
+        onDealsChange={onRefresh}
+      />
     </div>
   );
 };
+

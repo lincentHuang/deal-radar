@@ -24,6 +24,21 @@ export interface CrawlerJobLog {
   message: string;
 }
 
+import { SmartDeal } from '@/features/deals/types/deal.types';
+
+export interface CrawlerExecutionResult {
+  success: boolean;
+  message: string;
+  crawledCount: number;
+  insertedCount: number;
+  updatedCount: number;
+  purgedCount: number;
+  totalCount: number;
+  createdDeals: SmartDeal[];
+  updatedDeals: SmartDeal[];
+  targetNames: string[];
+}
+
 export interface AdminStats {
   totalDeals: number;
   hotDeals: number;
@@ -33,3 +48,6 @@ export interface AdminStats {
   crawlerTargetsCount: number;
   enabledTargetsCount: number;
 }
+
+
+

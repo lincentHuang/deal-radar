@@ -23,6 +23,7 @@ import {
 import { CreateCrawlerTargetSchema } from '../schemas/admin.schema';
 import { getDeals, updateDeal, deleteDeal, toggleDealHot, toggleDealFlash, upsertCrawledDeals } from '@/features/deals/server/deals-dal';
 import { SmartDeal } from '@/features/deals/types/deal.types';
+import { crawlLiveTargets } from '@/features/deals/server/fb-crawler.service';
 import { revalidatePath } from 'next/cache';
 
 const MASTER_ADMIN_PIN = process.env.ADMIN_PIN || '8888';
@@ -250,12 +251,7 @@ export async function updateCrawlerScheduleAction(newSchedule: Partial<CrawlerSc
 /**
  * 手動觸發即時爬蟲 (支援單站、多站勾選或全站全量爬取)
  */
-export async function triggerManualCrawlAction(targetIds?: string | string[]): Promise<{
-  success: boolean;
-  message: string;
-  crawledDeals: SmartDeal[];
-  insertedCount: number;
-}> {
+export async function triggerManualCrawlAction(targetIds?: string | string[]): Promise<import('../types/admin.types').CrawlerExecutionResult> {
   try {
     const targets = await getCrawlerTargets();
     let selectedTargets: CrawlerTargetConfig[] = [];
@@ -269,59 +265,46 @@ export async function triggerManualCrawlAction(targetIds?: string | string[]): P
     }
 
     if (selectedTargets.length === 0) {
-      return { success: false, message: '未選取或無啟用的爬蟲目標站點', crawledDeals: [], insertedCount: 0 };
+      return {
+        success: false,
+        message: '未選取或無啟用的爬蟲目標站點',
+        crawledCount: 0,
+        insertedCount: 0,
+        updatedCount: 0,
+        purgedCount: 0,
+        totalCount: 0,
+        createdDeals: [],
+        updatedDeals: [],
+        targetNames: [],
+      };
     }
 
-    const targetNames = selectedTargets.map((t) => t.name).join('、');
+    const targetNames = selectedTargets.map((t) => t.name);
+    const targetNamesStr = targetNames.join('、');
 
-    // 產生高品質即時爬蟲解析卡片
-    const simulatedCrawledDeals: SmartDeal[] = selectedTargets.flatMap((t, idx) => {
-      const now = new Date();
-      const end = new Date(Date.now() + 86400000 * (idx % 2 === 0 ? 4 : 7));
-      
-      return [
-        {
-          id: `deal-crawl-${t.id}-${Date.now()}`,
-          title: `【${t.name}】限時破盤促銷！指定熱門商品買一送一`,
-          subtitle: `最新官方即時爬取更新 · 全台門市同慶`,
-          category: t.defaultCategory,
-          channelType: 'offline',
-          merchant: {
-            name: t.name,
-            logo: t.logo,
-            storeBranches: '全台實體門市與專櫃',
-          },
-          regions: ['全部地區', '全台實體門市'],
-          originalPrice: 120 + idx * 20,
-          discountPrice: 60 + idx * 10,
-          priceUnit: '組',
-          targetItems: ['人氣招牌推薦品項', '限時特惠商品'],
-          conditions: ['買一送一', '現場出示領取', '售完為止'],
-          eligibleCards: ['國泰CUBE', '台新@GoGo', '玉山U Bear'],
-          tags: [`#${t.name}`, '#買一送一', '#即時抓取', '#限時破盤'],
-          startDate: now.toISOString(),
-          endDate: end.toISOString(),
-          isHot: true,
-          isFlashDeal: true,
-          source: 'official',
-          sourcePlatform: 'Merchant',
-          likeCount: 5 + idx * 3,
-          commentCount: 2,
-          imageUrl: t.logo || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&auto=format&fit=crop&q=80',
-        },
-      ];
-    });
+    // 轉換為爬蟲目標配置
+    const targetsToCrawl = selectedTargets.map((t) => ({
+      id: t.id,
+      name: t.name,
+      url: t.url,
+      logo: t.logo || '',
+      defaultCategory: (t.defaultCategory as 'food' | 'grocery') || 'food',
+    }));
 
-    const result = await upsertCrawledDeals(simulatedCrawledDeals);
+    // 執行真實 Playwright + Gemini AI 即時採集與解析
+    const crawledDeals = await crawlLiveTargets(targetsToCrawl);
+
+    // 存入資料庫與更新現有資料
+    const result = await upsertCrawledDeals(crawledDeals);
 
     await addCrawlerLog({
       targetId: Array.isArray(targetIds) ? targetIds.join(',') : (targetIds || 'all'),
       targetName: selectedTargets.length === 1 ? selectedTargets[0].name : `${selectedTargets.length} 個選取站點`,
       type: 'manual',
       status: 'success',
-      crawledCount: simulatedCrawledDeals.length,
+      crawledCount: crawledDeals.length,
       insertedCount: result.insertedCount,
-      message: `手動抓取【${targetNames}】完成：成功解析 ${simulatedCrawledDeals.length} 筆特惠情報，寫入 ${result.insertedCount} 筆新卡片`,
+      message: `真實即時抓取【${targetNamesStr}】完成：成功採集解析 ${crawledDeals.length} 筆真實特惠情報，寫入 ${result.insertedCount} 筆新卡片，更新 ${result.updatedCount} 筆，清理 ${result.purgedCount} 筆過期項目`,
     });
 
     revalidatePath('/');
@@ -330,9 +313,15 @@ export async function triggerManualCrawlAction(targetIds?: string | string[]): P
 
     return {
       success: true,
-      message: `🎉 手動爬取成功！已自 ${selectedTargets.length} 個站點抓取 ${simulatedCrawledDeals.length} 筆資料並更新至情報牆`,
-      crawledDeals: simulatedCrawledDeals,
+      message: `🎉 真實爬蟲抓取完成！已自 ${selectedTargets.length} 個目標站點即時採集 ${crawledDeals.length} 筆真實資料，成功建立 ${result.insertedCount} 筆特價卡片！`,
+      crawledCount: crawledDeals.length,
       insertedCount: result.insertedCount,
+      updatedCount: result.updatedCount,
+      purgedCount: result.purgedCount,
+      totalCount: result.totalCount,
+      createdDeals: result.createdDeals,
+      updatedDeals: result.updatedDeals,
+      targetNames,
     };
   } catch (error: any) {
     await addCrawlerLog({
@@ -345,8 +334,14 @@ export async function triggerManualCrawlAction(targetIds?: string | string[]): P
     return {
       success: false,
       message: error.message || '手動抓取失敗',
-      crawledDeals: [],
+      crawledCount: 0,
       insertedCount: 0,
+      updatedCount: 0,
+      purgedCount: 0,
+      totalCount: 0,
+      createdDeals: [],
+      updatedDeals: [],
+      targetNames: [],
     };
   }
 }

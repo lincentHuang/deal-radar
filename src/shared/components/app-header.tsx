@@ -10,6 +10,9 @@ import { useMobileNative } from '@/shared/hooks/use-mobile-native';
 import { SubHeaderTagNav } from '@/features/subscriptions/components/sub-header-tag-nav';
 import { RecommendedTagsModal } from '@/features/subscriptions/components/recommended-tags-modal';
 
+import { UserMenuDropdown } from '@/features/auth/components/user-menu-dropdown';
+import { AuthModal } from '@/features/auth/components/auth-modal';
+
 export const AppHeader: React.FC = () => {
   const [filters, setFilters] = useAtom(dealFiltersAtom);
   const [subscribedTags] = useAtom(subscribedTagsAtom);
@@ -132,19 +135,8 @@ export const AppHeader: React.FC = () => {
               <span className="sm:hidden">管理</span>
             </Link>
 
-            {/* 4. 個人中心 / 標籤管理 */}
-            <Link
-              href="/profile"
-              className={`text-xs font-bold px-3 sm:px-3.5 py-2 rounded-full transition-all flex items-center gap-1.5 border shadow-xs ${
-                pathname === '/profile'
-                  ? 'bg-slate-900 text-white border-slate-900 font-extrabold'
-                  : 'bg-white text-slate-700 hover:text-slate-900 hover:bg-slate-50 border-slate-200/80'
-              }`}
-            >
-              <User className="w-4 h-4 text-slate-600" />
-              <span className="hidden sm:inline">我的標籤 ({subscribedTags.length})</span>
-              <span className="sm:hidden">我的</span>
-            </Link>
+            {/* 4. 會員選單與登入/註冊入口 */}
+            <UserMenuDropdown />
           </nav>
         </div>
 
@@ -157,6 +149,9 @@ export const AppHeader: React.FC = () => {
         isOpen={isRecommendedModalOpen}
         onClose={() => setIsRecommendedModalOpen(false)}
       />
+
+      {/* 全域會員登入/註冊彈窗 */}
+      <AuthModal />
     </>
   );
 };

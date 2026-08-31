@@ -119,14 +119,15 @@ export const CRAWL_TARGETS: CrawlTarget[] = [
 ];
 
 /**
- * 執行 FB 官方粉絲專頁爬蟲並整合 Gemini AI 解析
+ * 執行即時目標爬蟲（支援 Facebook 粉專與官方活動網頁，整合 Gemini AI 多模態解析）
  */
-export async function crawlFacebookDeals(): Promise<SmartDeal[]> {
+export async function crawlLiveTargets(targetsToCrawl?: CrawlTarget[]): Promise<SmartDeal[]> {
+  const targets = (targetsToCrawl && targetsToCrawl.length > 0) ? targetsToCrawl : CRAWL_TARGETS;
   const extractedDeals: SmartDeal[] = [];
   let browser;
 
   try {
-    console.log('[FB-Crawler] Starting Playwright Chromium for FB crawl...');
+    console.log(`[Live-Crawler] Launching Playwright Chromium for ${targets.length} live target(s)...`);
     browser = await chromium.launch({
       headless: true,
       args: ['--disable-blink-features=AutomationControlled', '--no-sandbox'],
@@ -141,114 +142,173 @@ export async function crawlFacebookDeals(): Promise<SmartDeal[]> {
 
     const page = await context.newPage();
 
-    for (const target of CRAWL_TARGETS) {
+    for (const target of targets) {
       try {
-        console.log(`[FB-Crawler] Scraping: ${target.name} (${target.url})...`);
-        await page.goto(target.url, { waitUntil: 'domcontentloaded', timeout: 25000 }).catch(() => {});
-        await page.waitForTimeout(3000);
+        console.log(`[Live-Crawler] Scraping live target: ${target.name} (${target.url})...`);
 
-        // 關閉登入彈窗
-        try {
-          const closeBtn = await page.$(
-            'div[aria-label="關閉"], div[aria-label="Close"], [role="button"]:has-text("稍後再說"), [role="button"]:has-text("Not Now"), div[aria-label="隱藏"]'
-          );
-          if (closeBtn) {
-            await closeBtn.click();
-            await page.waitForTimeout(1000);
-          }
-        } catch {}
+        // Case 1: Facebook 官方粉絲專頁
+        if (target.url.includes('facebook.com')) {
+          await page.goto(target.url, { waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {});
+          await page.waitForTimeout(2500);
 
-        // 展開「查看更多」按鈕
-        try {
-          const seeMoreBtns = await page.$$(
-            'div[role="button"]:has-text("查看更多"), span:has-text("查看更多")'
-          );
-          for (const btn of seeMoreBtns.slice(0, 8)) {
-            await btn.click().catch(() => {});
-          }
-          await page.waitForTimeout(1200);
-        } catch {}
+          // 關閉登入彈窗
+          try {
+            const closeBtn = await page.$(
+              'div[aria-label="關閉"], div[aria-label="Close"], [role="button"]:has-text("稍後再說"), [role="button"]:has-text("Not Now"), div[aria-label="隱藏"]'
+            );
+            if (closeBtn) {
+              await closeBtn.click();
+              await page.waitForTimeout(800);
+            }
+          } catch {}
 
-        // 微滾動加載更多內容
-        await page.evaluate(() => window.scrollBy(0, 1000));
-        await page.waitForTimeout(2000);
+          // 展開「查看更多」按鈕
+          try {
+            const seeMoreBtns = await page.$$(
+              'div[role="button"]:has-text("查看更多"), span:has-text("查看更多")'
+            );
+            for (const btn of seeMoreBtns.slice(0, 5)) {
+              await btn.click().catch(() => {});
+            }
+            await page.waitForTimeout(800);
+          } catch {}
 
-        // 提取 DOM
-        const rawPosts = await page.evaluate((targetInfo) => {
-          const results: Array<{ text: string; images: string[]; link: string }> = [];
-          const articles = document.querySelectorAll('div[role="article"]');
+          // 微滾動加載更多內容
+          await page.evaluate(() => window.scrollBy(0, 800));
+          await page.waitForTimeout(1500);
 
-          articles.forEach((art, idx) => {
-            if (idx >= 8) return;
-            const text = (art as HTMLElement).innerText || art.textContent || '';
-            if (text.length < 25) return;
+          // 提取 DOM
+          const rawPosts = await page.evaluate((targetInfo) => {
+            const results: Array<{ text: string; images: string[]; link: string }> = [];
+            const articles = document.querySelectorAll('div[role="article"]');
 
-            const images = Array.from(art.querySelectorAll('img'))
-              .map((img) => img.src)
-              .filter(
-                (src) =>
-                  src &&
-                  !src.includes('rsrc.php') &&
-                  !src.includes('emoji') &&
-                  !src.includes('data:image')
-              );
+            articles.forEach((art, idx) => {
+              if (idx >= 6) return;
+              const text = (art as HTMLElement).innerText || art.textContent || '';
+              if (text.length < 15) return;
 
-            const links = Array.from(art.querySelectorAll('a'))
-              .map((a) => a.href)
-              .filter(
-                (href) =>
-                  href &&
-                  (href.includes('/posts/') ||
-                    href.includes('story.php') ||
-                    href.includes('fbid='))
-              );
+              const images = Array.from(art.querySelectorAll('img'))
+                .map((img) => img.src)
+                .filter(
+                  (src) =>
+                    src &&
+                    !src.includes('rsrc.php') &&
+                    !src.includes('emoji') &&
+                    !src.includes('data:image')
+                );
 
-            const cleanedText = text
-              .replace(/所有心情：[\s\S]*$/g, '')
-              .replace(/讚\s*留言\s*分享[\s\S]*/g, '')
-              .replace(/查看更多/g, '')
-              .trim();
+              const links = Array.from(art.querySelectorAll('a'))
+                .map((a) => a.href)
+                .filter(
+                  (href) =>
+                    href &&
+                    (href.includes('/posts/') ||
+                      href.includes('story.php') ||
+                      href.includes('fbid=') ||
+                      href.includes('/photo'))
+                );
 
-            results.push({
-              text: cleanedText,
-              images: Array.from(new Set(images)),
-              link: links[0] || targetInfo.url,
+              const cleanedText = text
+                .replace(/所有心情：[\s\S]*$/g, '')
+                .replace(/讚\s*留言\s*分享[\s\S]*/g, '')
+                .replace(/查看更多/g, '')
+                .trim();
+
+              results.push({
+                text: cleanedText,
+                images: Array.from(new Set(images)),
+                link: links[0] || targetInfo.url,
+              });
             });
-          });
 
-          return results;
-        }, target);
+            return results;
+          }, target);
 
-        console.log(`[FB-Crawler] Found ${rawPosts.length} posts from ${target.name}. Filtering current month and running Gemini AI parser...`);
+          console.log(`[Live-Crawler] Found ${rawPosts.length} real posts from ${target.name}.`);
 
-        // 僅保留「當月份 / 最新」之文章，並使用 Gemini AI 萃取
-        for (const raw of rawPosts) {
-          if (!isCurrentMonthOrRecent(raw.text)) {
-            console.log(`[FB-Crawler] Skipping older/out-of-month post: ${raw.text.slice(0, 30)}...`);
-            continue;
+          for (const raw of rawPosts) {
+            const rawPostInput: RawCrawledPost = {
+              merchantId: target.id,
+              merchantName: target.name,
+              merchantLogo: target.logo,
+              text: raw.text,
+              images: raw.images,
+              link: raw.link,
+            };
+
+            const structuredDeals = await parseDealsWithGemini(rawPostInput);
+            if (structuredDeals && structuredDeals.length > 0) {
+              extractedDeals.push(...structuredDeals);
+            }
           }
+        } 
+        // Case 2: 官方主題活動網頁 (如全家 Let's Cafe, 7-11 專題等)
+        else {
+          await page.goto(target.url, { waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {});
+          await page.waitForTimeout(2000);
 
-          const rawPostInput: RawCrawledPost = {
-            merchantId: target.id,
-            merchantName: target.name,
-            merchantLogo: target.logo,
-            text: raw.text,
-            images: raw.images,
-            link: raw.link,
-          };
+          const webItems = await page.evaluate((baseUrl) => {
+            const results: Array<{ title: string; desc: string; imgUrl: string; link: string }> = [];
 
-          const structuredDeals = await parseDealsWithGemini(rawPostInput);
-          if (structuredDeals && structuredDeals.length > 0) {
-            extractedDeals.push(...structuredDeals);
+            // 1. 全家專題
+            const famiCards = document.querySelectorAll('.news .news__inner, .event-card, .activity-item, .card');
+            if (famiCards.length > 0) {
+              famiCards.forEach((card) => {
+                const title = card.querySelector('.news__title, h2, h3, h4, .title')?.textContent?.trim() || '';
+                const desc = card.querySelector('.news__desc, p, .desc')?.textContent?.trim() || '';
+                const imgEl = card.querySelector('img') as HTMLImageElement | null;
+                let imgUrl = imgEl?.src || '';
+                if (imgUrl && !imgUrl.startsWith('http')) {
+                  imgUrl = new URL(imgUrl, baseUrl).href;
+                }
+                if (title || desc) {
+                  results.push({ title, desc, imgUrl, link: baseUrl });
+                }
+              });
+            } else {
+              // 通用活動頁擷取
+              const links = document.querySelectorAll('a');
+              links.forEach((a) => {
+                const img = a.querySelector('img');
+                const text = a.innerText?.trim() || '';
+                if (img && img.src && text.length > 5) {
+                  results.push({
+                    title: text.split('\n')[0],
+                    desc: text.replace(/\n+/g, ' '),
+                    imgUrl: img.src,
+                    link: a.href || baseUrl,
+                  });
+                }
+              });
+            }
+
+            return results;
+          }, target.url);
+
+          console.log(`[Live-Crawler] Scraped ${webItems.length} items from official webpage: ${target.name}`);
+
+          for (const item of webItems.slice(0, 6)) {
+            const rawPostInput: RawCrawledPost = {
+              merchantId: target.id,
+              merchantName: target.name,
+              merchantLogo: target.logo,
+              text: `${item.title}\n${item.desc}`,
+              images: item.imgUrl ? [item.imgUrl] : [],
+              link: item.link || target.url,
+            };
+
+            const structuredDeals = await parseDealsWithGemini(rawPostInput);
+            if (structuredDeals && structuredDeals.length > 0) {
+              extractedDeals.push(...structuredDeals);
+            }
           }
         }
-
       } catch (targetErr) {
-        console.error(`[FB-Crawler] Error crawling ${target.name}:`, (targetErr as Error).message);
+        console.error(`[Live-Crawler] Error scraping target ${target.name}:`, (targetErr as Error).message);
       }
     }
   } catch (err) {
-    console.error('[FB-Crawler] Critical browser error:', (err as Error).message);
+    console.error('[Live-Crawler] Playwright browser error:', (err as Error).message);
   } finally {
     if (browser) {
       await browser.close().catch(() => {});
@@ -259,24 +319,25 @@ export async function crawlFacebookDeals(): Promise<SmartDeal[]> {
 }
 
 /**
+ * 相容舊介面
+ */
+export async function crawlFacebookDeals(): Promise<SmartDeal[]> {
+  return crawlLiveTargets();
+}
+
+/**
  * 異步執行爬蟲並直接更新資料庫 (不阻塞呼叫者)
  */
 export function triggerAsyncCrawlerJob(): void {
   console.log('[Crawler] Asynchronously triggering crawler in background...');
   
-  // 非同步執行
   setImmediate(async () => {
     try {
-      // 1. FB 粉專爬取 (7-11, 全家, FamiPort)
-      const deals = await crawlFacebookDeals();
+      const deals = await crawlLiveTargets();
       if (deals.length > 0) {
         const result = await upsertCrawledDeals(deals);
-        console.log(`[FB-Crawler Background Worker] Finished! Ingested ${result.insertedCount} new deals, total database: ${result.totalCount}`);
+        console.log(`[Crawler Background Worker] Finished! Ingested ${result.insertedCount} real deals, total database: ${result.totalCount}`);
       }
-
-      // 2. 官方網站專題活動爬取 (Let's Café 官方專題頁)
-      const webDeals = await crawlAllOfficialWebTargets();
-      console.log(`[Official-Web-Crawler] Ingested ${webDeals.length} official web deals.`);
     } catch (err) {
       console.error('[Crawler Background Worker] Async job error:', (err as Error).message);
     }

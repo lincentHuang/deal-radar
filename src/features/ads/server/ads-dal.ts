@@ -1,8 +1,8 @@
 import 'server-only';
 import { AdCampaign, CreateAdCampaignInput, AdCampaignStatus, TrafficEstimate, AdBiddingModel } from '../types/ad.types';
+import { prisma } from '@/shared/lib/prisma';
 
-// 初始廣告活動快取
-let inMemoryCampaigns: AdCampaign[] = [
+const INITIAL_CAMPAIGNS = [
   {
     id: 'ad-camp-starbucks-01',
     merchantName: '星巴克 Starbucks',
@@ -12,8 +12,8 @@ let inMemoryCampaigns: AdCampaign[] = [
     imageUrl: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=1200&auto=format&fit=crop&q=80',
     ctaText: '立即查看優惠詳情',
     discountBadge: '🔥 買一送一',
-    placement: 'hero_banner',
-    biddingModel: 'cpm',
+    placement: 'hero_banner' as const,
+    biddingModel: 'cpm' as const,
     dailyBudget: 600,
     durationDays: 5,
     startDate: '2026-08-30',
@@ -23,23 +23,22 @@ let inMemoryCampaigns: AdCampaign[] = [
     impressions: 12080,
     clicks: 423,
     ctr: 3.5,
-    status: 'active',
+    status: 'active' as const,
     targetCategories: ['food'],
     targetRegions: ['全部地區'],
     targetTags: ['#咖啡', '#星巴克', '#買一送一'],
-    createdAt: '2026-08-30 10:00:00',
   },
   {
     id: 'ad-camp-pxmart-02',
     merchantName: '全聯福利中心 PX MART',
     merchantLogo: 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=120&auto=format&fit=crop&q=80',
-    title: '週末會員狂歡購！舒潔頂級抽取式衛生紙 第 2 件 5 折',
+    title: '週末會員狂歡購！舒潔頂級抽取式衛生紙 第 2 件 5折',
     subtitle: '滿千再贈 800 點福利點，全支付綁定玉山銀行享 3% 全點回饋，家庭囤貨必衝',
     imageUrl: 'https://images.unsplash.com/photo-1584556812952-905ffd0c611a?w=1200&auto=format&fit=crop&q=80',
     ctaText: '查看門市特惠條件',
     discountBadge: '🏷️ 第 2 件 5 折',
-    placement: 'hero_banner',
-    biddingModel: 'cpc',
+    placement: 'hero_banner' as const,
+    biddingModel: 'cpc' as const,
     dailyBudget: 500,
     durationDays: 3,
     startDate: '2026-08-31',
@@ -49,48 +48,128 @@ let inMemoryCampaigns: AdCampaign[] = [
     impressions: 4800,
     clicks: 148,
     ctr: 3.08,
-    status: 'active',
+    status: 'active' as const,
     targetCategories: ['grocery'],
     targetRegions: ['全部地區'],
     targetTags: ['#全聯', '#衛生紙', '#生活用品'],
-    createdAt: '2026-08-31 09:00:00',
   },
 ];
 
-export async function getAdCampaigns(merchantName?: string): Promise<AdCampaign[]> {
-  if (!merchantName || merchantName === 'all') {
-    return inMemoryCampaigns;
+function mapDbCampaignToAdCampaign(record: any): AdCampaign {
+  return {
+    id: record.id,
+    merchantName: record.merchantName,
+    merchantLogo: record.merchantLogo ?? undefined,
+    title: record.title,
+    subtitle: record.subtitle ?? undefined,
+    imageUrl: record.imageUrl,
+    ctaText: record.ctaText ?? undefined,
+    discountBadge: record.discountBadge ?? undefined,
+    placement: record.placement as any,
+    biddingModel: record.biddingModel as any,
+    dailyBudget: record.dailyBudget,
+    durationDays: record.durationDays,
+    startDate: record.startDate,
+    endDate: record.endDate,
+    totalBudget: record.totalBudget,
+    spentBudget: record.spentBudget,
+    impressions: record.impressions,
+    clicks: record.clicks,
+    ctr: record.ctr,
+    status: record.status as any,
+    targetCategories: record.targetCategories ?? [],
+    targetRegions: record.targetRegions ?? [],
+    targetTags: record.targetTags ?? [],
+    createdAt: record.createdAt instanceof Date ? record.createdAt.toISOString().replace('T', ' ').substring(0, 19) : record.createdAt,
+  };
+}
+
+let isAdsSeeding = false;
+async function ensureCampaignsSeeded(): Promise<void> {
+  if (isAdsSeeding) return;
+  try {
+    const count = await prisma.adCampaign.count();
+    if (count === 0) {
+      isAdsSeeding = true;
+      for (const camp of INITIAL_CAMPAIGNS) {
+        await prisma.adCampaign.create({
+          data: camp,
+        });
+      }
+      console.log('[Ads-DAL] ✅ Auto-seeded initial ad campaigns into remote database.');
+    }
+  } catch (err) {
+    console.error('[Ads-DAL] ⚠️ ensureCampaignsSeeded error:', err);
+  } finally {
+    isAdsSeeding = false;
   }
-  const cleanName = merchantName.toLowerCase().trim();
-  return inMemoryCampaigns.filter((c) => 
-    c.merchantName.toLowerCase().includes(cleanName) ||
-    cleanName.includes(c.merchantName.toLowerCase())
-  );
+}
+
+export async function getAdCampaigns(merchantName?: string): Promise<AdCampaign[]> {
+  await ensureCampaignsSeeded();
+  
+  let where: any = {};
+  if (merchantName && merchantName !== 'all') {
+    where = {
+      merchantName: {
+        contains: merchantName.trim(),
+        mode: 'insensitive',
+      },
+    };
+  }
+
+  const records = await prisma.adCampaign.findMany({
+    where,
+    orderBy: { createdAt: 'desc' },
+  });
+
+  return records.map(mapDbCampaignToAdCampaign);
 }
 
 export async function createAdCampaign(input: CreateAdCampaignInput): Promise<AdCampaign> {
   const totalBudget = input.dailyBudget * input.durationDays;
-  const newCampaign: AdCampaign = {
-    ...input,
-    id: `ad-camp-${Date.now()}`,
-    totalBudget,
-    spentBudget: 0,
-    impressions: 0,
-    clicks: 0,
-    ctr: 0,
-    status: 'active', // 建立即啟動投放
-    createdAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
-  };
+  const newCampaign = await prisma.adCampaign.create({
+    data: {
+      id: `ad-camp-${Date.now()}`,
+      merchantName: input.merchantName,
+      merchantLogo: input.merchantLogo ?? null,
+      title: input.title,
+      subtitle: input.subtitle ?? null,
+      imageUrl: input.imageUrl,
+      ctaText: input.ctaText ?? null,
+      discountBadge: input.discountBadge ?? null,
+      placement: input.placement,
+      biddingModel: input.biddingModel,
+      dailyBudget: input.dailyBudget,
+      durationDays: input.durationDays,
+      startDate: input.startDate,
+      endDate: input.endDate,
+      totalBudget,
+      spentBudget: 0,
+      impressions: 0,
+      clicks: 0,
+      ctr: 0,
+      status: 'active',
+      targetCategories: input.targetCategories || [],
+      targetRegions: input.targetRegions || [],
+      targetTags: input.targetTags || [],
+    },
+  });
 
-  inMemoryCampaigns = [newCampaign, ...inMemoryCampaigns];
-  return newCampaign;
+  return mapDbCampaignToAdCampaign(newCampaign);
 }
 
 export async function updateAdCampaignStatus(id: string, status: AdCampaignStatus): Promise<AdCampaign | null> {
-  const campaign = inMemoryCampaigns.find((c) => c.id === id);
-  if (!campaign) return null;
-  campaign.status = status;
-  return campaign;
+  try {
+    const updated = await prisma.adCampaign.update({
+      where: { id },
+      data: { status },
+    });
+    return mapDbCampaignToAdCampaign(updated);
+  } catch (err) {
+    console.error(`[Ads-DAL] Update status for ${id} failed:`, err);
+    return null;
+  }
 }
 
 export function calculateTrafficEstimate(

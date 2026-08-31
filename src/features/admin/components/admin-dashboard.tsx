@@ -172,6 +172,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           initialSchedule={initialSchedule}
           initialLogs={initialLogs}
           onRefresh={() => router.refresh()}
+          onViewDealsTab={() => handleTabChange('deals')}
         />
       )}
 

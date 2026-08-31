@@ -1,0 +1,159 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  avatar        String?
+  passwordHash  String?   // null if registered via Google OAuth
+  role          String    @default("USER") // USER, MERCHANT, ADMIN
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts          Account[]
+  sessions          Session[]
+  bookmarks         Bookmark[]
+  subscriptionTags  UserSubscriptionTag[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String   @id @default(cuid())
+  userId            String
+  provider          String   // "google", "email"
+  providerAccountId String   // Google sub ID or email
+  accessToken       String?
+  refreshToken      String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Bookmark {
+  id        String   @id @default(cuid())
+  userId    String
+  dealId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dealId])
+  @@index([userId])
+  @@map("bookmarks")
+}
+
+model UserSubscriptionTag {
+  id        String   @id @default(cuid())
+  userId    String
+  tagName   String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tagName])
+  @@index([userId])
+  @@map("user_subscription_tags")
+}
+
+model Deal {
+  id             String   @id @default(cuid())
+  title          String
+  subtitle       String?
+  category       String
+  channelType    String
+  merchantName   String
+  merchantLogo   String?
+  storeBranches  String?
+  regions        String[]
+  originalPrice  Float?
+  discountPrice  Float?
+  priceUnit      String?
+  targetItems    String[]
+  conditions     String[]
+  eligibleCards  String[]
+  tags           String[]
+  startDate      String
+  endDate        String
+  isHot          Boolean  @default(false)
+  isFlashDeal    Boolean  @default(false)
+  source         String   @default("official")
+  sourcePlatform String?
+  sourceUrl      String?
+  likeCount      Int      @default(0)
+  commentCount   Int      @default(0)
+  priceHistory   Json?
+  priceDropAlert Json?
+  imageUrl       String?
+  images         String[]
+  aspectRatio    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([category])
+  @@index([channelType])
+  @@index([isHot])
+  @@index([isFlashDeal])
+  @@index([createdAt])
+  @@map("deals")
+}
+
+model AdCampaign {
+  id               String   @id @default(cuid())
+  merchantName     String
+  merchantLogo     String?
+  title            String
+  subtitle         String?
+  imageUrl         String
+  ctaText          String?
+  discountBadge    String?
+  placement        String   @default("hero_banner")
+  biddingModel     String   @default("cpm")
+  dailyBudget      Float
+  durationDays     Int
+  startDate        String
+  endDate          String
+  totalBudget      Float
+  spentBudget      Float    @default(0)
+  impressions      Int      @default(0)
+  clicks           Int      @default(0)
+  ctr              Float    @default(0)
+  status           String   @default("active")
+  targetCategories String[]
+  targetRegions    String[]
+  targetTags       String[]
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([merchantName])
+  @@index([status])
+  @@map("ad_campaigns")
+}
