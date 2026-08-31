@@ -33,14 +33,20 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
-  ChevronsRight
+  ChevronsRight,
+  ShieldCheck
 } from 'lucide-react';
 import { useMobileNative } from '@/shared/hooks/use-mobile-native';
 import Image from 'next/image';
 import { MerchantCreateForm } from './merchant-create-form';
 import { BatchEditModal } from '@/features/deals/components/batch-edit-modal';
 import { DuplicateDealsModal } from '@/features/deals/components/duplicate-deals-modal';
-import { findDuplicateDeals } from '@/features/deals/utils/duplicate-detector';
+import { 
+  findDuplicateDeals, 
+  loadDismissedPairs, 
+  saveDismissedPairs, 
+  getAllPairKeysInGroup 
+} from '@/features/deals/utils/duplicate-detector';
 
 const POPULAR_SUGGESTED_TAGS = [
   '#買一送一',
@@ -74,6 +80,7 @@ export const MerchantBrandDealsManager: React.FC<MerchantBrandDealsManagerProps>
   const [tagError, setTagError] = useState<string | null>(null);
   const [previewImageEnlarged, setPreviewImageEnlarged] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [dismissedPairs, setDismissedPairs] = useState<Set<string>>(() => loadDismissedPairs());
   
   // 分頁狀態
   const [pageSize, setPageSize] = useState<number>(20);
@@ -91,8 +98,23 @@ export const MerchantBrandDealsManager: React.FC<MerchantBrandDealsManagerProps>
     setCurrentPage(1);
   }, [brandName, pageSize]);
 
-  // 智慧偵測本品牌重複特價情報
-  const duplicateGroups = useMemo(() => findDuplicateDeals(deals), [deals]);
+  // 智慧偵測本品牌重複特價情報（排除已確認保留配對，除非出現新情報）
+  const duplicateGroups = useMemo(() => findDuplicateDeals(deals, dismissedPairs), [deals, dismissedPairs]);
+
+  const handleDismissAllDuplicates = () => {
+    triggerHaptic('success');
+    const allKeys: string[] = [];
+    duplicateGroups.forEach((g) => {
+      const keys = getAllPairKeysInGroup(g.deals.map((d) => d.id));
+      allKeys.push(...keys);
+    });
+
+    const newDismissed = new Set(dismissedPairs);
+    allKeys.forEach((k) => newDismissed.add(k));
+    saveDismissedPairs(newDismissed);
+    setDismissedPairs(newDismissed);
+    setFeedback({ text: `已全部保留【${brandName}】的 ${duplicateGroups.length} 組情報，後續不再提示比對！`, type: 'success' });
+  };
 
   const handleAddTag = (tagToAdd?: string) => {
     if (!editingDeal) return;
@@ -397,17 +419,31 @@ export const MerchantBrandDealsManager: React.FC<MerchantBrandDealsManagerProps>
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-600 mt-0.5">
-                  點擊開啟並排比對視窗，可直接選擇保留最完整的一筆並自動下架重複項目
+                  活動名稱或品項相符，可點擊「全部保留」直接忽略且不再提示，或點擊「立即比對保留」自選保留卡片
                 </p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => setIsDuplicateModalOpen(true)}
-              className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-black rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 flex-shrink-0"
-            >
-              <span>比對並清理 ({duplicateGroups.length})</span>
-            </button>
+            <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap flex-shrink-0">
+              <button
+                type="button"
+                onClick={handleDismissAllDuplicates}
+                className="px-3.5 py-2 bg-white hover:bg-slate-100 border border-amber-300 text-slate-700 text-xs font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                title="全部保留且不再提示（直到有新的一樣情報時才再比對）"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                <span>全部保留 (不再提示)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsDuplicateModalOpen(true)}
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-black rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+              >
+                <span>立即比對保留</span>
+                <span className="px-1.5 py-0.2 rounded-full bg-white/25 text-[10px]">
+                  {duplicateGroups.length} 組
+                </span>
+              </button>
+            </div>
           </div>
         )}
 
@@ -915,7 +951,7 @@ export const MerchantBrandDealsManager: React.FC<MerchantBrandDealsManagerProps>
       {/* 放大檢視圖片 Lightbox Modal */}
       {previewImageEnlarged && (
         <div 
-          className="fixed inset-0 !m-0 z-60 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4"
+          className="fixed inset-0 !m-0 z-[100] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4"
           onClick={() => setPreviewImageEnlarged(null)}
         >
           <div 
@@ -1013,6 +1049,12 @@ export const MerchantBrandDealsManager: React.FC<MerchantBrandDealsManagerProps>
           setSelectedIds((prev) => prev.filter((id) => !deletedSet.has(id)));
           showFeedback(message);
           onDealsChange?.();
+        }}
+        onDismissed={(newPairKeys, message) => {
+          const newSet = new Set(dismissedPairs);
+          newPairKeys.forEach((k) => newSet.add(k));
+          setDismissedPairs(newSet);
+          setFeedback({ text: message, type: 'success' });
         }}
       />
 

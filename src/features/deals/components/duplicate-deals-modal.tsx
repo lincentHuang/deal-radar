@@ -2,7 +2,12 @@
 
 import React, { useState } from 'react';
 import { SmartDeal } from '../types/deal.types';
-import { DuplicateDealGroup } from '../utils/duplicate-detector';
+import { 
+  DuplicateDealGroup, 
+  getAllPairKeysInGroup, 
+  loadDismissedPairs, 
+  saveDismissedPairs 
+} from '../utils/duplicate-detector';
 import { batchDeleteDealsAction, updateDealAction } from '../server/deal.actions';
 import { 
   X, 
@@ -21,7 +26,9 @@ import {
   ArrowRight,
   Flame,
   Zap,
-  Combine
+  Combine,
+  ShieldCheck,
+  CheckCheck
 } from 'lucide-react';
 import { useMobileNative } from '@/shared/hooks/use-mobile-native';
 import Image from 'next/image';
@@ -31,6 +38,7 @@ interface DuplicateDealsModalProps {
   onClose: () => void;
   duplicateGroups: DuplicateDealGroup[];
   onResolved: (keptDeal: SmartDeal, deletedIds: string[], message: string) => void;
+  onDismissed?: (dismissedPairKeys: string[], message: string) => void;
 }
 
 export const DuplicateDealsModal: React.FC<DuplicateDealsModalProps> = ({
@@ -38,6 +46,7 @@ export const DuplicateDealsModal: React.FC<DuplicateDealsModalProps> = ({
   onClose,
   duplicateGroups,
   onResolved,
+  onDismissed,
 }) => {
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [selectedKeepIdMap, setSelectedKeepIdMap] = useState<Record<string, string>>({});
@@ -76,9 +85,46 @@ export const DuplicateDealsModal: React.FC<DuplicateDealsModalProps> = ({
     }
   };
 
-  // 1. 保留所選卡片，刪除其餘重複項目
-  const handleKeepSelected = async () => {
-    const dealsToDelete = currentGroup.deals.filter((d) => d.id !== selectedKeepId);
+  // 1. 全部保留此組 (不再提示比對，除非有新的一樣情報)
+  const handleKeepAllCurrentGroup = () => {
+    triggerHaptic('success');
+    const pairKeys = getAllPairKeysInGroup(currentGroup.deals.map((d) => d.id));
+    const currentDismissed = loadDismissedPairs();
+    pairKeys.forEach((k) => currentDismissed.add(k));
+    saveDismissedPairs(currentDismissed);
+
+    const msg = `已全部保留此組 ${currentGroup.deals.length} 筆卡片，後續不再提示比對！`;
+    onDismissed?.(pairKeys, msg);
+
+    if (duplicateGroups.length <= 1) {
+      onClose();
+    } else if (currentIndex >= duplicateGroups.length - 1) {
+      setCurrentIndex(Math.max(0, duplicateGroups.length - 2));
+    }
+  };
+
+  // 2. 全部保留所有重複組 (不再提示比對)
+  const handleKeepAllEveryGroup = () => {
+    triggerHaptic('success');
+    const allKeys: string[] = [];
+    duplicateGroups.forEach((g) => {
+      const keys = getAllPairKeysInGroup(g.deals.map((d) => d.id));
+      allKeys.push(...keys);
+    });
+
+    const currentDismissed = loadDismissedPairs();
+    allKeys.forEach((k) => currentDismissed.add(k));
+    saveDismissedPairs(currentDismissed);
+
+    const msg = `已全部保留所有 ${duplicateGroups.length} 組重複情報，後續不再提示比對！`;
+    onDismissed?.(allKeys, msg);
+    onClose();
+  };
+
+  // 3. 直接保留指定卡片並刪除其餘重複項目 (一鍵即時生效)
+  const handleDirectKeep = async (keepDealId: string) => {
+    const keepDeal = currentGroup.deals.find((d) => d.id === keepDealId) || selectedKeepDeal;
+    const dealsToDelete = currentGroup.deals.filter((d) => d.id !== keepDealId);
     if (dealsToDelete.length === 0) return;
 
     setLoading(true);
@@ -90,8 +136,10 @@ export const DuplicateDealsModal: React.FC<DuplicateDealsModalProps> = ({
     setLoading(false);
     if (deleteRes.success) {
       triggerHaptic('success');
-      onResolved(selectedKeepDeal, deleteIds, `已保留【${selectedKeepDeal.title.slice(0, 12)}...】，下架 ${deleteIds.length} 筆重複卡片！`);
-      if (currentIndex >= duplicateGroups.length - 1 && duplicateGroups.length > 1) {
+      onResolved(keepDeal, deleteIds, `已保留【${keepDeal.title.slice(0, 12)}...】，下架 ${deleteIds.length} 筆重複卡片！`);
+      if (duplicateGroups.length <= 1) {
+        onClose();
+      } else if (currentIndex >= duplicateGroups.length - 1) {
         setCurrentIndex(Math.max(0, duplicateGroups.length - 2));
       }
     } else {
@@ -99,7 +147,12 @@ export const DuplicateDealsModal: React.FC<DuplicateDealsModalProps> = ({
     }
   };
 
-  // 2. 合併標籤並保留所選卡片
+  // 4. 保留目前所選卡片，刪除其餘重複項目
+  const handleKeepSelected = async () => {
+    await handleDirectKeep(selectedKeepId);
+  };
+
+  // 5. 合併標籤並保留所選卡片
   const handleMergeAndKeep = async () => {
     const dealsToDelete = currentGroup.deals.filter((d) => d.id !== selectedKeepId);
     if (dealsToDelete.length === 0) return;
@@ -129,7 +182,9 @@ export const DuplicateDealsModal: React.FC<DuplicateDealsModalProps> = ({
 
     const updatedFinalDeal = updateRes.deal || { ...selectedKeepDeal, tags: mergedTags };
     onResolved(updatedFinalDeal, deleteIds, `已合併標籤並保留【${selectedKeepDeal.title.slice(0, 12)}...】，下架 ${deleteIds.length} 筆重複卡片！`);
-    if (currentIndex >= duplicateGroups.length - 1 && duplicateGroups.length > 1) {
+    if (duplicateGroups.length <= 1) {
+      onClose();
+    } else if (currentIndex >= duplicateGroups.length - 1) {
       setCurrentIndex(Math.max(0, duplicateGroups.length - 2));
     }
   };
@@ -158,12 +213,12 @@ export const DuplicateDealsModal: React.FC<DuplicateDealsModalProps> = ({
               <span className="text-[11px] font-bold text-slate-500">判定依據：</span>
               {currentGroup.matchedFields.includes('name') && (
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 text-[10px] font-extrabold">
-                  ✓ 活動名字相符
+                  ✓ 活動名稱相符 (完全一致/容錯1字)
                 </span>
               )}
               {currentGroup.matchedFields.includes('item') && (
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-extrabold">
-                  ✓ 商品品真相符 {currentGroup.sharedItems && currentGroup.sharedItems.length > 0 && `(${currentGroup.sharedItems.join(', ')})`}
+                  ✓ 商品品項相符 {currentGroup.sharedItems && currentGroup.sharedItems.length > 0 && `(${currentGroup.sharedItems.join(', ')})`} (完全一致/容錯1字)
                 </span>
               )}
             </div>
@@ -206,12 +261,14 @@ export const DuplicateDealsModal: React.FC<DuplicateDealsModalProps> = ({
         </div>
 
         {/* 提示導引 */}
-        <div className="py-2.5 px-3.5 my-3 bg-amber-50/70 border border-amber-200/80 rounded-2xl text-xs text-amber-900 flex items-center justify-between flex-shrink-0">
+        <div className="py-2.5 px-3.5 my-3 bg-amber-50/70 border border-amber-200/80 rounded-2xl text-xs text-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2 flex-shrink-0">
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-amber-600 flex-shrink-0" />
-            <span>請點選下方您想要<strong>「保留」</strong>的卡片，系統將為您自動下架其餘重複項目：</span>
+            <span>
+              若需保留所有項目，請點選<strong>「全部保留」</strong>（系統將記錄並<strong>不再提示</strong>，除非有新情報）。或選定欲保留者下架其餘：
+            </span>
           </div>
-          <span className="text-[11px] font-bold text-amber-700 hidden sm:inline">
+          <span className="text-[11px] font-bold text-amber-700 flex-shrink-0">
             共 {currentGroup.deals.length} 筆候選項目
           </span>
         </div>
@@ -222,7 +279,6 @@ export const DuplicateDealsModal: React.FC<DuplicateDealsModalProps> = ({
             {currentGroup.deals.map((deal, idx) => {
               const isSelected = deal.id === selectedKeepId;
               const hasImage = Boolean(deal.imageUrl);
-              const tagCount = deal.tags?.length || 0;
 
               return (
                 <div
@@ -327,6 +383,26 @@ export const DuplicateDealsModal: React.FC<DuplicateDealsModalProps> = ({
                       {deal.isFlashDeal && <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-bold">⚡ 快閃</span>}
                     </div>
                   </div>
+
+                  {/* 一鍵保留快捷按鈕 */}
+                  <div className="pt-3 border-t border-slate-100 mt-1">
+                    <button
+                      type="button"
+                      disabled={loading}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDirectKeep(deal.id);
+                      }}
+                      className={`w-full py-2 px-3 rounded-2xl text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-95 ${
+                        isSelected
+                          ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                          : 'bg-slate-900 hover:bg-slate-800 text-white'
+                      }`}
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      <span>{isSelected ? '★ 確定保留此筆 (下架其餘)' : '保留這筆，下架其餘'}</span>
+                    </button>
+                  </div>
                 </div>
               );
             })}
@@ -335,27 +411,41 @@ export const DuplicateDealsModal: React.FC<DuplicateDealsModalProps> = ({
 
         {/* Footer 操作按鈕 */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-4 border-t border-slate-100 flex-shrink-0">
-          <div className="text-xs text-slate-500 font-semibold">
-            目前將保留：<strong className="text-rose-600">【{selectedKeepDeal.title.slice(0, 16)}...】</strong>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              disabled={loading}
+              onClick={handleKeepAllCurrentGroup}
+              className="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300/80 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs active:scale-95"
+              title="全部保留本組卡片，且後續不再提醒比對（除非有新情報）"
+            >
+              <ShieldCheck className="w-4 h-4 text-emerald-600" />
+              <span>全部保留此組 (不再提示)</span>
+            </button>
+
+            {duplicateGroups.length > 1 && (
+              <button
+                type="button"
+                disabled={loading}
+                onClick={handleKeepAllEveryGroup}
+                className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
+                title="一次將所有重複群組全部保留並忽略"
+              >
+                <CheckCheck className="w-3.5 h-3.5 text-slate-500" />
+                <span>全部保留全部 ({duplicateGroups.length} 組)</span>
+              </button>
+            )}
           </div>
 
           <div className="flex items-center gap-2 flex-wrap justify-end">
             <button
               type="button"
-              onClick={handleNext}
-              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
-            >
-              略過此組
-            </button>
-
-            <button
-              type="button"
               disabled={loading}
               onClick={handleMergeAndKeep}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95"
+              className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs active:scale-95"
               title="合併所有候選項目的標籤並保留此筆"
             >
-              <Combine className="w-3.5 h-3.5" />
+              <Combine className="w-3.5 h-3.5 text-indigo-600" />
               <span>合併標籤並保留</span>
             </button>
 
@@ -363,10 +453,10 @@ export const DuplicateDealsModal: React.FC<DuplicateDealsModalProps> = ({
               type="button"
               disabled={loading}
               onClick={handleKeepSelected}
-              className="px-5 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95"
+              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95"
             >
               <Check className="w-3.5 h-3.5 text-emerald-400" />
-              <span>保留此筆，下架其餘 ({currentGroup.deals.length - 1})</span>
+              <span>保留選定，下架其餘 ({currentGroup.deals.length - 1})</span>
             </button>
           </div>
         </div>
@@ -374,3 +464,4 @@ export const DuplicateDealsModal: React.FC<DuplicateDealsModalProps> = ({
     </div>
   );
 };
+

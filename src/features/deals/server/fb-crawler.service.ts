@@ -142,6 +142,20 @@ export async function crawlLiveTargets(targetsToCrawl?: CrawlTarget[]): Promise<
 
     const page = await context.newPage();
 
+    // 預先查詢資料庫中已存在的來源網址 (sourceUrl)，實現「先比對來源是否之前抓過，全新來源才調用 AI 解析」
+    let existingSourceUrls = new Set<string>();
+    try {
+      const { prisma } = await import('@/shared/lib/prisma');
+      const existingDeals = await prisma.deal.findMany({
+        where: { sourceUrl: { not: null } },
+        select: { sourceUrl: true },
+      });
+      existingSourceUrls = new Set(existingDeals.map((d) => d.sourceUrl!).filter(Boolean));
+      console.log(`[Live-Crawler] 🗄️ Loaded ${existingSourceUrls.size} existing source URLs from database for pre-deduplication.`);
+    } catch (e) {
+      console.warn('[Live-Crawler] Could not pre-fetch sourceUrls from database, will proceed without cache pre-filter.');
+    }
+
     for (const target of targets) {
       try {
         console.log(`[Live-Crawler] Scraping live target: ${target.name} (${target.url})...`);
@@ -227,18 +241,30 @@ export async function crawlLiveTargets(targetsToCrawl?: CrawlTarget[]): Promise<
           console.log(`[Live-Crawler] Found ${rawPosts.length} real posts from ${target.name}.`);
 
           for (const raw of rawPosts) {
+            const rawLink = raw.link?.trim();
+
+            // 1. 前置比對來源連結是否之前已抓取過
+            if (rawLink && existingSourceUrls.has(rawLink)) {
+              console.log(`[Live-Crawler] ⏭️ 來源連結先前已抓過 (${rawLink})，略過 AI 解析以節省資源與防重複。`);
+              continue;
+            }
+
+            // 2. 全新來源 ➔ 調用 Gemini AI 解析成不同獨立特價卡片 (1-to-N)
+            console.log(`[Live-Crawler] 🤖 發現全新來源連結 (${rawLink || target.url})，調用 Gemini AI 結構化拆解成不同特價卡片...`);
             const rawPostInput: RawCrawledPost = {
               merchantId: target.id,
               merchantName: target.name,
               merchantLogo: target.logo,
               text: raw.text,
               images: raw.images,
-              link: raw.link,
+              link: rawLink || target.url,
             };
 
             const structuredDeals = await parseDealsWithGemini(rawPostInput);
             if (structuredDeals && structuredDeals.length > 0) {
+              console.log(`[Live-Crawler] ✨ Gemini AI 成功自該來源拆解出 ${structuredDeals.length} 筆獨立卡片！`);
               extractedDeals.push(...structuredDeals);
+              if (rawLink) existingSourceUrls.add(rawLink);
             }
           }
         } 
@@ -288,18 +314,27 @@ export async function crawlLiveTargets(targetsToCrawl?: CrawlTarget[]): Promise<
           console.log(`[Live-Crawler] Scraped ${webItems.length} items from official webpage: ${target.name}`);
 
           for (const item of webItems.slice(0, 6)) {
+            const itemLink = (item.link || target.url)?.trim();
+
+            if (itemLink && existingSourceUrls.has(itemLink)) {
+              console.log(`[Live-Crawler] ⏭️ 官方活動連結已存在 (${itemLink})，略過 AI 解析。`);
+              continue;
+            }
+
             const rawPostInput: RawCrawledPost = {
               merchantId: target.id,
               merchantName: target.name,
               merchantLogo: target.logo,
               text: `${item.title}\n${item.desc}`,
               images: item.imgUrl ? [item.imgUrl] : [],
-              link: item.link || target.url,
+              link: itemLink,
             };
 
             const structuredDeals = await parseDealsWithGemini(rawPostInput);
             if (structuredDeals && structuredDeals.length > 0) {
+              console.log(`[Live-Crawler] ✨ Gemini AI 成功自官方活動頁解析出 ${structuredDeals.length} 筆獨立卡片！`);
               extractedDeals.push(...structuredDeals);
+              if (itemLink) existingSourceUrls.add(itemLink);
             }
           }
         }

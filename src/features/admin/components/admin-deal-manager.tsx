@@ -38,14 +38,20 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
-  ChevronsRight
+  ChevronsRight,
+  ShieldCheck
 } from 'lucide-react';
 import { useMobileNative } from '@/shared/hooks/use-mobile-native';
 import Image from 'next/image';
 import { MerchantCreateForm } from '@/features/merchant/components/merchant-create-form';
 import { BatchEditModal } from '@/features/deals/components/batch-edit-modal';
 import { DuplicateDealsModal } from '@/features/deals/components/duplicate-deals-modal';
-import { findDuplicateDeals } from '@/features/deals/utils/duplicate-detector';
+import { 
+  findDuplicateDeals, 
+  loadDismissedPairs, 
+  saveDismissedPairs, 
+  getAllPairKeysInGroup 
+} from '@/features/deals/utils/duplicate-detector';
 
 const POPULAR_SUGGESTED_TAGS = [
   '#買一送一',
@@ -77,6 +83,7 @@ export const AdminDealManager: React.FC<AdminDealManagerProps> = ({ initialDeals
   const [previewImageEnlarged, setPreviewImageEnlarged] = useState<string | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
   const [actionMessage, setActionMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [dismissedPairs, setDismissedPairs] = useState<Set<string>>(() => loadDismissedPairs());
   
   // 分頁狀態
   const [pageSize, setPageSize] = useState<number>(20);
@@ -94,8 +101,23 @@ export const AdminDealManager: React.FC<AdminDealManagerProps> = ({ initialDeals
     setCurrentPage(1);
   }, [searchQuery, categoryFilter, sourceFilter, pageSize]);
 
-  // 智慧偵測重複活動群組
-  const duplicateGroups = useMemo(() => findDuplicateDeals(deals), [deals]);
+  // 智慧偵測重複活動群組（排除已審核保留之配對，除非出現新情報）
+  const duplicateGroups = useMemo(() => findDuplicateDeals(deals, dismissedPairs), [deals, dismissedPairs]);
+
+  const handleDismissAllDuplicates = () => {
+    triggerHaptic('success');
+    const allKeys: string[] = [];
+    duplicateGroups.forEach((g) => {
+      const keys = getAllPairKeysInGroup(g.deals.map((d) => d.id));
+      allKeys.push(...keys);
+    });
+
+    const newDismissed = new Set(dismissedPairs);
+    allKeys.forEach((k) => newDismissed.add(k));
+    saveDismissedPairs(newDismissed);
+    setDismissedPairs(newDismissed);
+    showFeedback(`已將全部 ${duplicateGroups.length} 組情報標記為保留，後續不再提示比對！`);
+  };
 
   const handleAddTag = (tagToAdd?: string) => {
     if (!editingDeal) return;
@@ -404,24 +426,35 @@ export const AdminDealManager: React.FC<AdminDealManagerProps> = ({ initialDeals
                   系統智慧偵測到 {duplicateGroups.length} 組可能重複的特價情報
                 </h4>
                 <span className="px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 text-[10px] font-black">
-                  建議清理
+                  建議處理
                 </span>
               </div>
               <p className="text-[11px] text-slate-600 mt-0.5">
-                包含相同品項、價格重疊或相同來源之活動，點擊即可開啟雙欄比對並自選要保留的卡片
+                活動名稱或商品品項高度吻合，可點擊「全部保留」直接忽略並不不再提示，或點擊「立即比對保留」自選保留卡片
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setIsDuplicateModalOpen(true)}
-            className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-black rounded-2xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 flex-shrink-0"
-          >
-            <span>立即比對保留</span>
-            <span className="px-1.5 py-0.2 rounded-full bg-white/25 text-[10px]">
-              {duplicateGroups.length} 組
-            </span>
-          </button>
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap flex-shrink-0">
+            <button
+              type="button"
+              onClick={handleDismissAllDuplicates}
+              className="px-3.5 py-2 bg-white hover:bg-slate-100 border border-amber-300 text-slate-700 text-xs font-bold rounded-2xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+              title="全部保留且不再提示（直到有新的一樣情報時才再比對）"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+              <span>全部保留 (不再提示)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsDuplicateModalOpen(true)}
+              className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-black rounded-2xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+            >
+              <span>立即比對保留</span>
+              <span className="px-1.5 py-0.2 rounded-full bg-white/25 text-[10px]">
+                {duplicateGroups.length} 組
+              </span>
+            </button>
+          </div>
         </div>
       )}
 
@@ -1076,7 +1109,7 @@ export const AdminDealManager: React.FC<AdminDealManagerProps> = ({ initialDeals
       {/* 放大檢視圖片 Lightbox Modal */}
       {previewImageEnlarged && (
         <div 
-          className="fixed inset-0 !m-0 z-60 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4"
+          className="fixed inset-0 !m-0 z-[100] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4"
           onClick={() => setPreviewImageEnlarged(null)}
         >
           <div 
@@ -1171,6 +1204,12 @@ export const AdminDealManager: React.FC<AdminDealManagerProps> = ({ initialDeals
           setSelectedIds((prev) => prev.filter((id) => !deletedSet.has(id)));
           showFeedback(message);
           onDealsChange?.();
+        }}
+        onDismissed={(newPairKeys, message) => {
+          const newSet = new Set(dismissedPairs);
+          newPairKeys.forEach((k) => newSet.add(k));
+          setDismissedPairs(newSet);
+          showFeedback(message);
         }}
       />
 

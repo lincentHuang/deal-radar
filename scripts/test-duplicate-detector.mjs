@@ -1,93 +1,13 @@
-import { SmartDeal } from '../types/deal.types';
+import assert from 'node:assert';
 
-export interface DuplicateDealGroup {
-  id: string;
-  reason: string;
-  matchedFields: ('name' | 'item')[];
-  sharedItems?: string[];
-  deals: SmartDeal[];
-  primaryTitle: string;
-  merchantName: string;
-}
-
-export const DISMISSED_PAIRS_STORAGE_KEY = 'deal_aggregator_dismissed_duplicate_pairs';
-
-/**
- * 產生兩筆 Deal 的唯一配對鍵值 (Canonical Pair Key)
- */
-export function getDuplicatePairKey(id1: string, id2: string): string {
-  return [id1, id2].sort().join('::');
-}
-
-/**
- * 產生群組內所有 Deal 之間的所有配對鍵值清單
- */
-export function getAllPairKeysInGroup(dealIds: string[]): string[] {
-  const keys: string[] = [];
-  for (let i = 0; i < dealIds.length; i++) {
-    for (let j = i + 1; j < dealIds.length; j++) {
-      keys.push(getDuplicatePairKey(dealIds[i], dealIds[j]));
-    }
-  }
-  return keys;
-}
-
-/**
- * 從 LocalStorage 載入使用者已審核並選擇「全部保留 (不再提示)」的配對名單
- */
-export function loadDismissedPairs(): Set<string> {
-  if (typeof window === 'undefined') return new Set();
-  try {
-    const raw = localStorage.getItem(DISMISSED_PAIRS_STORAGE_KEY);
-    if (!raw) return new Set();
-    const parsed = JSON.parse(raw);
-    return new Set(Array.isArray(parsed) ? parsed : []);
-  } catch (e) {
-    return new Set();
-  }
-}
-
-/**
- * 持久化儲存已審核並選擇「全部保留」的配對名單至 LocalStorage
- */
-export function saveDismissedPairs(pairs: string[] | Set<string>): void {
-  if (typeof window === 'undefined') return;
-  try {
-    const arr = Array.from(pairs);
-    localStorage.setItem(DISMISSED_PAIRS_STORAGE_KEY, JSON.stringify(arr));
-  } catch (e) {
-    console.error('Failed to save dismissed duplicate pairs', e);
-  }
-}
-
-/**
- * 清除所有已忽略的重複配對（恢復預設狀態）
- */
-export function clearDismissedPairs(): void {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.removeItem(DISMISSED_PAIRS_STORAGE_KEY);
-  } catch (e) {
-    console.error('Failed to clear dismissed duplicate pairs', e);
-  }
-}
-
-/**
- * 計算兩字串的萊文斯坦編輯距離 (Levenshtein Distance)
- */
-export function levenshteinDistance(a: string, b: string): number {
+function levenshteinDistance(a, b) {
   if (a === b) return 0;
   if (a.length === 0) return b.length;
   if (b.length === 0) return a.length;
 
-  const matrix: number[][] = [];
-
-  for (let i = 0; i <= b.length; i++) {
-    matrix[i] = [i];
-  }
-  for (let j = 0; j <= a.length; j++) {
-    matrix[0][j] = j;
-  }
+  const matrix = [];
+  for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+  for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
 
   for (let i = 1; i <= b.length; i++) {
     for (let j = 1; j <= a.length; j++) {
@@ -95,9 +15,9 @@ export function levenshteinDistance(a: string, b: string): number {
         matrix[i][j] = matrix[i - 1][j - 1];
       } else {
         matrix[i][j] = Math.min(
-          matrix[i - 1][j - 1] + 1, // 替換 (substitution)
-          matrix[i][j - 1] + 1,     // 插入 (insertion)
-          matrix[i - 1][j] + 1      // 刪除 (deletion)
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1
         );
       }
     }
@@ -106,37 +26,22 @@ export function levenshteinDistance(a: string, b: string): number {
   return matrix[b.length][a.length];
 }
 
-/**
- * 判定兩字串是否「完全一樣」或「容錯一個字」
- * - 完全一樣：s1 === s2 (長度 > 0)
- * - 容錯一個字：當字串長度 >= 2 時，編輯距離 <= 1
- */
-export function isExactOrOneCharDiff(s1: string, s2: string): { isMatch: boolean; isExact: boolean; diffCount: number } {
+function isExactOrOneCharDiff(s1, s2) {
   if (!s1 || !s2) return { isMatch: false, isExact: false, diffCount: -1 };
-  
-  if (s1 === s2) {
-    return { isMatch: true, isExact: true, diffCount: 0 };
-  }
-
-  // 容錯一個字：必須具備基本長度 (>=2)，避免 1 個字（如「茶」vs「水」）被誤判為相同
+  if (s1 === s2) return { isMatch: true, isExact: true, diffCount: 0 };
   if (s1.length >= 2 && s2.length >= 2) {
     const dist = levenshteinDistance(s1, s2);
     if (dist <= 1) {
       return { isMatch: true, isExact: false, diffCount: dist };
     }
   }
-
   return { isMatch: false, isExact: false, diffCount: -1 };
 }
 
-/**
- * 清理並標準化活動標題與商品名稱字串
- */
-export function normalizeText(text: string, merchantName?: string): string {
+function normalizeText(text, merchantName) {
   if (!text) return '';
   let clean = text.toLowerCase();
 
-  // 移除店家常見前綴與品牌名稱
   if (merchantName) {
     const cleanMerchant = merchantName.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fa5]/gi, '');
     if (cleanMerchant) {
@@ -154,37 +59,30 @@ export function normalizeText(text: string, merchantName?: string): string {
     clean = clean.replaceAll(kw, '');
   }
 
-  // 移除多餘符號與空白
   clean = clean.replace(/[【】\[\]（）()_+\-~！!？?：:，,。.\/\s#＃*★☆◆◇\^]/g, '');
-
   return clean.trim();
 }
 
-/**
- * 依據「活動名稱 或 活動品項 完全一樣（容錯一個字）」進行重複特價情報比對
- * 支援傳入已確認保留 (Dismissed) 配對名單：
- * - 若重複群組內所有配對皆已被確認保留，則略過不再提示
- * - 若群組內出現任何未審核的「新」一樣情報，則自動再次觸發提示比對
- */
-export function findDuplicateDeals(
-  deals: SmartDeal[],
-  dismissedPairsInput?: string[] | Set<string>
-): DuplicateDealGroup[] {
+function getDuplicatePairKey(id1, id2) {
+  return [id1, id2].sort().join('::');
+}
+
+function findDuplicateDeals(deals, dismissedPairsInput) {
   const dismissedSet = dismissedPairsInput instanceof Set 
     ? dismissedPairsInput 
     : new Set(dismissedPairsInput || []);
 
-  const groups: DuplicateDealGroup[] = [];
-  const processedDealIds = new Set<string>();
+  const groups = [];
+  const processedDealIds = new Set();
 
   for (let i = 0; i < deals.length; i++) {
     const dealA = deals[i];
     if (processedDealIds.has(dealA.id)) continue;
 
-    const matchedDeals: SmartDeal[] = [dealA];
-    let matchedFields: ('name' | 'item')[] = [];
+    const matchedDeals = [dealA];
+    let matchedFields = [];
     let duplicateReason = '';
-    const allSharedItems: string[] = [];
+    const allSharedItems = [];
     let hasAnyUnresolvedPair = false;
 
     const normTitleA = normalizeText(dealA.title, dealA.merchant.name);
@@ -197,7 +95,6 @@ export function findDuplicateDeals(
       const normTitleB = normalizeText(dealB.title, dealB.merchant.name);
       const normMerchantB = dealB.merchant.name.toLowerCase().trim();
 
-      // 1. 檢查是否屬於同一品牌通路
       const isSameMerchant = 
         normMerchantA === normMerchantB ||
         (normMerchantA.length >= 2 && normMerchantB.length >= 2 && (
@@ -207,14 +104,12 @@ export function findDuplicateDeals(
 
       if (!isSameMerchant) continue;
 
-      // ====== 雙核心嚴格比對：1. 活動名稱 (Title)  2. 活動品項 (Target Items) ======
-      
-      // 1. 活動名稱比對 (完全一致 或 容錯一個字)
+      // 1. 活動名稱比對
       const titleMatchResult = isExactOrOneCharDiff(normTitleA, normTitleB);
       const isTitleMatched = titleMatchResult.isMatch;
 
-      // 2. 活動品項比對 (任一品項 完全一致 或 容錯一個字)
-      const matchedItemsBetweenPair: string[] = [];
+      // 2. 活動品項比對
+      const matchedItemsBetweenPair = [];
       let isItemMatched = false;
 
       if (dealA.targetItems && dealB.targetItems) {
@@ -235,17 +130,15 @@ export function findDuplicateDeals(
         }
       }
 
-      // 嚴格判定準則：只有在「活動名稱」或「活動品項」完全一樣（容錯一個字）時才進行重複比對歸組
       const isDuplicate = isTitleMatched || isItemMatched;
       if (!isDuplicate) continue;
 
-      // 檢查此配對是否已被確認保留
       const pairKey = getDuplicatePairKey(dealA.id, dealB.id);
       if (!dismissedSet.has(pairKey)) {
         hasAnyUnresolvedPair = true;
       }
 
-      const currentMatchedFields: ('name' | 'item')[] = [];
+      const currentMatchedFields = [];
 
       if (isTitleMatched && isItemMatched) {
         currentMatchedFields.push('name', 'item');
@@ -270,8 +163,6 @@ export function findDuplicateDeals(
 
     if (matchedDeals.length > 1) {
       processedDealIds.add(dealA.id);
-
-      // 只有在群組中包含未審核的配對（或新情報）時，才發起比對工作
       if (hasAnyUnresolvedPair) {
         groups.push({
           id: `dup-group-${dealA.id}`,
@@ -288,3 +179,76 @@ export function findDuplicateDeals(
 
   return groups;
 }
+
+// 測試案例
+console.log('--- 測試 1: 完全一致活動名稱 ---');
+const test1 = findDuplicateDeals([
+  { id: '1', title: '星巴克特大杯那堤買一送一', merchant: { name: '星巴克' }, targetItems: [] },
+  { id: '2', title: '星巴克特大杯那堤買一送一', merchant: { name: '星巴克' }, targetItems: [] },
+]);
+assert.strictEqual(test1.length, 1);
+assert.strictEqual(test1[0].deals.length, 2);
+console.log('✅ PASS: 完全一致活動名稱成功歸組');
+
+console.log('--- 測試 2: 容錯一個字活動名稱 (那堤 vs 拿堤) ---');
+const test2 = findDuplicateDeals([
+  { id: '1', title: '星巴克特大杯那堤買一送一', merchant: { name: '星巴克' }, targetItems: [] },
+  { id: '2', title: '星巴克特大杯拿堤買一送一', merchant: { name: '星巴克' }, targetItems: [] },
+]);
+assert.strictEqual(test2.length, 1);
+console.log('✅ PASS: 容錯一個字活動名稱成功歸組');
+
+console.log('--- 測試 3: 品項完全一致 ---');
+const test3 = findDuplicateDeals([
+  { id: '1', title: '超值特惠 A', merchant: { name: '全家' }, targetItems: ['黑松沙士'] },
+  { id: '2', title: '週末狂歡 B', merchant: { name: '全家' }, targetItems: ['黑松沙士'] },
+]);
+assert.strictEqual(test3.length, 1);
+assert.strictEqual(test3[0].matchedFields.includes('item'), true);
+console.log('✅ PASS: 品項完全一致成功歸組');
+
+console.log('--- 測試 4: 品項容錯一個字 (冰淇淋 vs 冰淇林) ---');
+const test4 = findDuplicateDeals([
+  { id: '1', title: '大促 A', merchant: { name: '全家' }, targetItems: ['布丁冰淇淋'] },
+  { id: '2', title: '大促 B', merchant: { name: '全家' }, targetItems: ['布丁冰淇林'] },
+]);
+assert.strictEqual(test4.length, 1);
+console.log('✅ PASS: 品項容錯一個字成功歸組');
+
+console.log('--- 測試 5: 完全不同品項與名稱不應歸組 ---');
+const test5 = findDuplicateDeals([
+  { id: '1', title: '星巴克特大杯那堤買一送一', merchant: { name: '星巴克' }, targetItems: ['特大杯那堤'] },
+  { id: '2', title: '星巴克巧克力可可碎片星冰樂第2杯半價', merchant: { name: '星巴克' }, targetItems: ['可可碎片星冰樂'] },
+]);
+assert.strictEqual(test5.length, 0);
+console.log('✅ PASS: 不同品項與名稱未誤判');
+
+console.log('--- 測試 6: 不同店家不應歸組 ---');
+const test6 = findDuplicateDeals([
+  { id: '1', title: '特大杯那堤買一送一', merchant: { name: '星巴克' }, targetItems: ['特大杯那堤'] },
+  { id: '2', title: '特大杯那堤買一送一', merchant: { name: '7-ELEVEN' }, targetItems: ['特大杯那堤'] },
+]);
+assert.strictEqual(test6.length, 0);
+console.log('✅ PASS: 不同通路不跨店歸組');
+
+console.log('--- 測試 7: 全部保留 (不再提示) 機制 ---');
+const dismissedSet = new Set(['1::2']);
+const test7 = findDuplicateDeals([
+  { id: '1', title: '星巴克特大杯那堤買一送一', merchant: { name: '星巴克' }, targetItems: [] },
+  { id: '2', title: '星巴克特大杯那堤買一送一', merchant: { name: '星巴克' }, targetItems: [] },
+], dismissedSet);
+assert.strictEqual(test7.length, 0);
+console.log('✅ PASS: 已選擇「全部保留」之重複情報不再提示比對');
+
+console.log('--- 測試 8: 新的一樣情報抵達時，重新觸發比對 ---');
+const test8 = findDuplicateDeals([
+  { id: '1', title: '星巴克特大杯那堤買一送一', merchant: { name: '星巴克' }, targetItems: [] },
+  { id: '2', title: '星巴克特大杯那堤買一送一', merchant: { name: '星巴克' }, targetItems: [] },
+  { id: '3', title: '星巴克特大杯那堤買一送一', merchant: { name: '星巴克' }, targetItems: [] },
+], dismissedSet);
+assert.strictEqual(test8.length, 1);
+assert.strictEqual(test8[0].deals.length, 3);
+console.log('✅ PASS: 抵達新一樣情報 (Deal 3) 時，精確重新觸發重複比對');
+
+console.log('🎉 所有 8 大測試案例 100% 成功通過！');
+

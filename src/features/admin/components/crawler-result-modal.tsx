@@ -542,7 +542,7 @@ export const CrawlerResultModal: React.FC<CrawlerResultModalProps> = ({
       {/* ✏️ 點擊卡片開啟之編輯資料 Modal */}
       {editingDeal && (
         <div 
-          className="fixed inset-0 !m-0 z-60 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto"
+          className="fixed inset-0 !m-0 z-[100] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto"
           onClick={() => setEditingDeal(null)}
         >
           <div 
@@ -886,7 +886,7 @@ export const CrawlerResultModal: React.FC<CrawlerResultModalProps> = ({
       {/* 放大檢視圖片 Lightbox Modal */}
       {previewImageEnlarged && (
         <div 
-          className="fixed inset-0 !m-0 z-70 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4"
+          className="fixed inset-0 !m-0 z-[110] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4"
           onClick={() => setPreviewImageEnlarged(null)}
         >
           <div 
