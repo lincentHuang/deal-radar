@@ -241,7 +241,9 @@ export function filterDealsLocally(deals: SmartDeal[], filters?: Partial<DealFil
             return savedB - savedA;
           }
 
-          return new Date(b.startDate).getTime() - new Date(a.startDate).getTime();
+          const timeDiff = new Date(b.startDate).getTime() - new Date(a.startDate).getTime();
+          if (timeDiff !== 0) return timeDiff;
+          return b.id.localeCompare(a.id);
         });
         break;
       }
@@ -278,21 +280,67 @@ export function filterDealsLocally(deals: SmartDeal[], filters?: Partial<DealFil
           if (endA !== endB) {
             return endA - endB;
           }
-          return new Date(b.startDate).getTime() - new Date(a.startDate).getTime();
+          const timeDiff = new Date(b.startDate).getTime() - new Date(a.startDate).getTime();
+          if (timeDiff !== 0) return timeDiff;
+          return b.id.localeCompare(a.id);
         });
         break;
       }
       case 'popular':
-        results.sort((a, b) => b.likeCount - a.likeCount);
+        results.sort((a, b) => {
+          if (b.likeCount !== a.likeCount) return b.likeCount - a.likeCount;
+          const timeDiff = new Date(b.startDate).getTime() - new Date(a.startDate).getTime();
+          if (timeDiff !== 0) return timeDiff;
+          return b.id.localeCompare(a.id);
+        });
         break;
       case 'latest':
       default:
-        results.sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+        results.sort((a, b) => {
+          const timeDiff = new Date(b.startDate).getTime() - new Date(a.startDate).getTime();
+          if (timeDiff !== 0) return timeDiff;
+          return b.id.localeCompare(a.id);
+        });
         break;
     }
   }
 
   return results;
+}
+
+export interface PaginatedDealsResult {
+  deals: SmartDeal[];
+  total: number;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+  offset?: number;
+}
+
+/**
+ * 依據篩選條件自遠端資料庫查詢特價情報 (支援瀑布流精確 offset 與分頁動態載入)
+ */
+export async function getPaginatedDeals(
+  filters?: Partial<DealFilterState>,
+  page: number = 1,
+  pageSize: number = 12,
+  offset?: number
+): Promise<PaginatedDealsResult> {
+  const allFiltered = await getDeals(filters);
+  const total = allFiltered.length;
+  const safePageSize = Math.max(1, pageSize);
+  const startIndex = offset !== undefined ? Math.max(0, offset) : (Math.max(1, page) - 1) * safePageSize;
+  const pageDeals = allFiltered.slice(startIndex, startIndex + safePageSize);
+  const hasMore = startIndex + pageDeals.length < total;
+
+  return {
+    deals: pageDeals,
+    total,
+    page: offset !== undefined ? Math.floor(startIndex / safePageSize) + 1 : Math.max(1, page),
+    pageSize: safePageSize,
+    hasMore,
+    offset: startIndex,
+  };
 }
 
 /**

@@ -1,12 +1,21 @@
 'use server';
 
-import { getDeals, getDealById, createDeal, redeemVoucher } from '@/features/deals/server/deals-dal';
+import { getDeals, getPaginatedDeals, getDealById, createDeal, redeemVoucher, PaginatedDealsResult } from '@/features/deals/server/deals-dal';
 import { DealFilterState, SmartDeal } from '@/features/deals/types/deal.types';
 import { MerchantCreateDealSchema, MerchantCreateDealInput } from '@/features/deals/schemas/deal.schema';
 import { revalidatePath } from 'next/cache';
 
 export async function fetchDealsAction(filters?: Partial<DealFilterState>): Promise<SmartDeal[]> {
   return await getDeals(filters);
+}
+
+export async function fetchPaginatedDealsAction(
+  filters?: Partial<DealFilterState>,
+  page: number = 1,
+  pageSize: number = 12,
+  offset?: number
+): Promise<PaginatedDealsResult> {
+  return await getPaginatedDeals(filters, page, pageSize, offset);
 }
 
 export async function fetchDealByIdAction(id: string): Promise<SmartDeal | null> {

@@ -24,9 +24,10 @@ import { useMobileNative } from '@/shared/hooks/use-mobile-native';
 interface SmartDealCardProps {
   deal: SmartDeal;
   onTagClick?: (tag: string) => void;
+  priority?: boolean;
 }
 
-export const SmartDealCard: React.FC<SmartDealCardProps> = ({ deal, onTagClick }) => {
+export const SmartDealCard: React.FC<SmartDealCardProps> = ({ deal, onTagClick, priority = false }) => {
   const setActiveDeal = useSetAtom(activeDealDetailAtom);
   const [subscribedTags] = useAtom(subscribedTagsAtom);
   const [liked, setLiked] = useState(false);
@@ -90,14 +91,16 @@ export const SmartDealCard: React.FC<SmartDealCardProps> = ({ deal, onTagClick }
       className="group relative flex flex-col bg-white rounded-2xl sm:rounded-3xl p-1 border border-slate-100/90 shadow-bubble hover:shadow-bubble-hover hover:-translate-y-1.5 transition-all duration-300 ease-out cursor-pointer overflow-hidden select-none"
     >
       {/* 📸 頂部：Pinterest 質感大圖封面 (完全依循圖片原始比例自適應) */}
-      <div className="relative w-full rounded-xl sm:rounded-2xl overflow-hidden bg-slate-100 mb-1.5 sm:mb-2 flex items-center justify-center">
+      <div className="relative w-full rounded-xl sm:rounded-2xl overflow-hidden bg-slate-100 mb-1.5 sm:mb-2 flex items-center justify-center min-h-[120px]">
         {deal.imageUrl && !imgError ? (
           <img
             src={deal.imageUrl}
             alt={deal.title}
             onError={() => setImgError(true)}
             className="w-full h-auto object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
-            loading="lazy"
+            loading={priority ? 'eager' : 'lazy'}
+            decoding="async"
+            fetchPriority={priority ? 'high' : 'auto'}
           />
         ) : (
           <div className="w-full h-36 flex flex-col items-center justify-center bg-gradient-to-br from-rose-50 to-orange-50 text-rose-400">

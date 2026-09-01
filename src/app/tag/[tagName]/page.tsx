@@ -1,5 +1,5 @@
 import React from 'react';
-import { getDeals } from '@/features/deals/server/deals-dal';
+import { getPaginatedDeals } from '@/features/deals/server/deals-dal';
 import { DealMasonryFeed } from '@/features/deals/components/deal-masonry-feed';
 import { DealDetailModal } from '@/features/deals/components/deal-detail-modal';
 import Link from 'next/link';
@@ -18,9 +18,9 @@ export default async function TagPage({ params }: TagPageProps) {
   const rawTag = decodeURIComponent(resolvedParams.tagName);
   const cleanTag = rawTag.startsWith('#') ? rawTag : `#${rawTag}`;
 
-  const deals = await getDeals({
+  const paginatedData = await getPaginatedDeals({
     selectedTag: cleanTag,
-  });
+  }, 1, 12);
 
   return (
     <main className="min-h-screen bg-slate-50/50 pb-16">
@@ -35,8 +35,12 @@ export default async function TagPage({ params }: TagPageProps) {
         </Link>
       </div>
 
-      {/* 核心 Feed 列表 */}
-      <DealMasonryFeed initialDeals={deals} />
+      {/* 核心 Feed 列表 (支援瀑布動態滾動載入模式) */}
+      <DealMasonryFeed
+        initialDeals={paginatedData.deals}
+        initialHasMore={paginatedData.hasMore}
+        initialTotal={paginatedData.total}
+      />
 
       {/* 彈窗詳情 */}
       <DealDetailModal />

@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useTransition } from 'react';
+import React, { useState, useEffect, useTransition, useRef, useCallback, useMemo } from 'react';
 import { useAtom } from 'jotai';
 import { dealFiltersAtom, subscribedTagsAtom } from '@/features/subscriptions/atoms/subscription-atoms';
 import { SmartDeal } from '@/features/deals/types/deal.types';
-import { fetchDealsAction } from '@/features/deals/server/deal.actions';
+import { fetchPaginatedDealsAction } from '@/features/deals/server/deal.actions';
 import { SmartDealCard } from '@/features/deals/components/smart-deal-card';
 import { DealMasonrySkeleton } from '@/features/deals/components/deal-skeleton';
 import { RecommendedTagsModal } from '@/features/subscriptions/components/recommended-tags-modal';
@@ -15,39 +15,177 @@ import {
   AlertCircle,
   Plus,
   Check,
-  Tag
+  Tag,
+  ChevronUp,
+  Loader2
 } from 'lucide-react';
 import { useMobileNative } from '@/shared/hooks/use-mobile-native';
 import confetti from 'canvas-confetti';
 
 interface DealMasonryFeedProps {
   initialDeals: SmartDeal[];
+  initialHasMore?: boolean;
+  initialTotal?: number;
 }
 
-export const DealMasonryFeed: React.FC<DealMasonryFeedProps> = ({ initialDeals }) => {
+export const DealMasonryFeed: React.FC<DealMasonryFeedProps> = ({ 
+  initialDeals,
+  initialHasMore = true,
+  initialTotal
+}) => {
   const [filters, setFilters] = useAtom(dealFiltersAtom);
   const [subscribedTags, setSubscribedTags] = useAtom(subscribedTagsAtom);
   const [deals, setDeals] = useState<SmartDeal[]>(initialDeals);
+  const [hasMore, setHasMore] = useState<boolean>(initialHasMore);
+  const [totalCount, setTotalCount] = useState<number>(initialTotal ?? initialDeals.length);
+  const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+  const [showScrollTop, setShowScrollTop] = useState<boolean>(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const { triggerHaptic } = useMobileNative();
 
-  // 監聽篩選器或訂閱標籤變更並動態調用 Server Action
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const isFirstRender = useRef<boolean>(true);
+
+  // 響應式固定欄數偵測 (手機 2 欄、平板 3 欄、桌機 4 欄)
+  const [colCount, setColCount] = useState<number>(2);
+
   useEffect(() => {
+    const updateColCount = () => {
+      const width = window.innerWidth;
+      if (width >= 1024) {
+        setColCount(4);
+      } else if (width >= 768) {
+        setColCount(3);
+      } else {
+        setColCount(2);
+      }
+    };
+
+    updateColCount();
+    window.addEventListener('resize', updateColCount);
+    return () => window.removeEventListener('resize', updateColCount);
+  }, []);
+
+  // 核心：依據欄數將卡片嚴格分配至固定欄位。
+  // 當新資料動態疊加時，新卡片只會往下追加到對應欄位底部，上面已經渲染的卡片完全不會移動、換欄或產生跳動！
+  const columns = useMemo(() => {
+    const cols: SmartDeal[][] = Array.from({ length: colCount }, () => []);
+    deals.forEach((deal, idx) => {
+      cols[idx % colCount].push(deal);
+    });
+    return cols;
+  }, [deals, colCount]);
+
+  // 監聽篩選器或訂閱標籤變更並動態重置並調用 Server Action
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      const isDefaultFilter = 
+        !filters.searchQuery && 
+        filters.selectedCity === '全部地區' && 
+        !filters.selectedDistrict && 
+        (!filters.selectedRegions || filters.selectedRegions.length === 0) &&
+        filters.channelType === 'all' &&
+        filters.category === 'all' &&
+        !filters.selectedCard &&
+        !filters.selectedTag &&
+        filters.sortBy === 'latest';
+
+      if (isDefaultFilter && initialDeals.length > 0) {
+        return;
+      }
+    }
+
     startTransition(async () => {
       try {
         setError(null);
-        const result = await fetchDealsAction({
+        setLoadMoreError(null);
+        const result = await fetchPaginatedDealsAction({
           ...filters,
           subscribedTags,
-        });
-        setDeals(result);
+        }, 1, 12, 0);
+        setDeals(result.deals);
+        setHasMore(result.hasMore);
+        setTotalCount(result.total);
       } catch (err: any) {
         setError('無法載入特價情報，請檢查網路連線後重試');
       }
     });
   }, [filters, subscribedTags]);
+
+  // 瀑布動態滾動載入下一頁：計算上面已經有哪些 (deals.length)，依據長度 offset 精確疊加，絕不更動上方已載入資料
+  const handleLoadMore = useCallback(async () => {
+    if (isLoadingMore || !hasMore || isPending) return;
+
+    setIsLoadingMore(true);
+    setLoadMoreError(null);
+    try {
+      const currentLength = deals.length;
+      const result = await fetchPaginatedDealsAction({
+        ...filters,
+        subscribedTags,
+      }, undefined, 12, currentLength);
+
+      setDeals((prev) => {
+        const existingIds = new Set(prev.map((d) => d.id));
+        const newUnique = result.deals.filter((d) => !existingIds.has(d.id));
+        if (newUnique.length === 0) {
+          setHasMore(false);
+          return prev;
+        }
+        return [...prev, ...newUnique];
+      });
+      setHasMore(result.hasMore);
+      setTotalCount(result.total);
+    } catch (err: any) {
+      setLoadMoreError('加載更多資料時出錯，請點擊重試');
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [isLoadingMore, hasMore, isPending, deals.length, filters, subscribedTags]);
+
+  // IntersectionObserver 哨兵監聽（提前 380px 無感加載）
+  useEffect(() => {
+    const target = sentinelRef.current;
+    if (!target) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          handleLoadMore();
+        }
+      },
+      {
+        root: null,
+        rootMargin: '380px',
+        threshold: 0.05,
+      }
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [handleLoadMore]);
+
+  // 滾動距離監聽（控制回到頂部按鈕顯隱）
+  useEffect(() => {
+    const onScroll = () => {
+      if (window.scrollY > 500) {
+        setShowScrollTop(true);
+      } else {
+        setShowScrollTop(false);
+      }
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  const scrollToTop = () => {
+    triggerHaptic('light');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const handleResetFilters = () => {
     triggerHaptic('medium');
@@ -281,7 +419,7 @@ export const DealMasonryFeed: React.FC<DealMasonryFeedProps> = ({ initialDeals }
               </span>
             </div>
             <p className="text-xs sm:text-sm font-semibold text-slate-400 mt-0.5">
-              共 {deals.length} 則即時特惠 · 點擊卡片查看完整 7 大要素
+              共 {totalCount || deals.length} 則即時特惠 · 點擊卡片查看完整 7 大要素
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -443,19 +581,89 @@ export const DealMasonryFeed: React.FC<DealMasonryFeedProps> = ({ initialDeals }
           </div>
         </div>
       ) : (
-        /* 狀態 4: ✅ Success 響應式瀑布流排版（手機雙欄 2 欄、平板 3 欄、桌機 4 欄） */
-        <div className="columns-2 md:columns-3 lg:columns-4 gap-2.5 sm:gap-2.5 w-full animate-fadeIn">
-          {deals.map((deal) => (
-            <div key={deal.id} className="break-inside-avoid mb-2.5">
-              <SmartDealCard
-                deal={deal}
-                onTagClick={(tag) => setFilters((prev) => ({ ...prev, selectedTag: tag }))}
-              />
+        /* 狀態 4: ✅ Success 響應式穩定瀑布流排版（各欄位獨立堆疊，加載新資料時上方已渲染之卡片絕對不跳動） */
+        <>
+          <div 
+            className="grid gap-2.5 sm:gap-2.5 w-full animate-fadeIn items-start"
+            style={{
+              gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))`
+            }}
+          >
+            {columns.map((columnDeals, colIdx) => (
+              <div key={colIdx} className="flex flex-col gap-2.5 w-full">
+                {columnDeals.map((deal, itemIdx) => (
+                  <div key={deal.id} className="w-full">
+                    <SmartDealCard
+                      deal={deal}
+                      priority={colIdx < 2 && itemIdx < 2}
+                      onTagClick={(tag) => setFilters((prev) => ({ ...prev, selectedTag: tag }))}
+                    />
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+
+          {/* 瀑布動態載入底部哨兵 (Sentinel) */}
+          {hasMore && <div ref={sentinelRef} className="h-6 w-full pointer-events-none" />}
+
+          {/* ⏳ 動態加載中指示器 */}
+          {isLoadingMore && (
+            <div className="w-full py-8 flex flex-col items-center justify-center gap-2 animate-fadeIn">
+              <div className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-white/95 shadow-bubble border border-rose-100/90 text-rose-600 text-xs font-bold backdrop-blur-md">
+                <Loader2 className="w-4 h-4 animate-spin text-rose-500" />
+                <span>⚡ 正在動態載入更多特價情報...</span>
+              </div>
             </div>
-          ))}
-        </div>
+          )}
+
+          {/* ⚠️ 加載更多出錯時的重試按鈕 */}
+          {loadMoreError && (
+            <div className="w-full py-6 flex flex-col items-center justify-center gap-2 animate-fadeIn">
+              <p className="text-xs text-rose-500 font-semibold">{loadMoreError}</p>
+              <button
+                type="button"
+                onClick={handleLoadMore}
+                className="text-xs font-bold px-4 py-2 rounded-full bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 shadow-xs transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>點擊重試載入</span>
+              </button>
+            </div>
+          )}
+
+          {/* ✨ 到底狀態與情報總覽提示 */}
+          {!hasMore && deals.length > 0 && !isLoadingMore && (
+            <div className="w-full py-10 flex flex-col items-center justify-center text-center gap-2 animate-fadeIn">
+              <div className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-slate-100/90 text-slate-600 text-xs font-bold border border-slate-200/60 shadow-xs">
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                <span>✨ 已為您呈現所有即時特惠（共 {totalCount || deals.length} 則）· 敬請期待更多每日情報！</span>
+              </div>
+              <button
+                type="button"
+                onClick={scrollToTop}
+                className="text-[11px] text-slate-400 hover:text-slate-700 underline font-semibold mt-1 transition-colors flex items-center gap-1 cursor-pointer"
+              >
+                <ChevronUp className="w-3.5 h-3.5" />
+                <span>回到最上方</span>
+              </button>
+            </div>
+          )}
+        </>
       )}
       </div>
+
+      {/* 浮動回到頂部按鈕 (右下角平滑飛入) */}
+      {showScrollTop && (
+        <button
+          type="button"
+          onClick={scrollToTop}
+          className="fixed bottom-20 sm:bottom-8 right-4 sm:right-8 z-40 p-3 rounded-full bg-slate-900/90 hover:bg-slate-900 text-white shadow-xl hover:scale-110 active:scale-95 transition-all duration-300 backdrop-blur-md border border-white/20 flex items-center justify-center group cursor-pointer"
+          title="回到最上方"
+        >
+          <ChevronUp className="w-5 h-5 group-hover:-translate-y-0.5 transition-transform" />
+        </button>
+      )}
 
       {/* 推薦標籤彈窗 */}
       <RecommendedTagsModal
