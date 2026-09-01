@@ -6,13 +6,13 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { dealFiltersAtom } from '@/features/subscriptions/atoms/subscription-atoms';
 import { ChannelType, SelectedRegionItem } from '@/features/deals/types/deal.types';
 import { TAIWAN_REGIONS } from '@/features/regions/data/taiwan-districts';
-import { 
-  X, 
-  SlidersHorizontal, 
-  MapPin, 
-  Store, 
-  RotateCcw, 
-  Check, 
+import {
+  X,
+  SlidersHorizontal,
+  MapPin,
+  Store,
+  RotateCcw,
+  Check,
   Calendar,
   Trash2
 } from 'lucide-react';
@@ -141,7 +141,7 @@ export const DealFilterModal: React.FC<DealFilterModalProps> = ({
         <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm animate-fadeIn" />
 
         {/* 內容主體 */}
-        <Dialog.Content 
+        <Dialog.Content
           aria-describedby="dialog-filter-desc"
           className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[calc(100%-2rem)] max-w-xl bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-100 flex flex-col max-h-[88vh] animate-scaleUp focus:outline-none"
         >
@@ -155,9 +155,7 @@ export const DealFilterModal: React.FC<DealFilterModalProps> = ({
                 <Dialog.Title className="text-lg font-black text-slate-900">
                   進階情報篩選
                 </Dialog.Title>
-                <Dialog.Description id="dialog-filter-desc" className="text-xs text-slate-500 font-medium mt-0.5">
-                  自訂通路模式、探索商圈與排序日期；主題品項由上方標籤一鍵聚合！
-                </Dialog.Description>
+
               </div>
             </div>
             <Dialog.Close asChild>
@@ -194,11 +192,10 @@ export const DealFilterModal: React.FC<DealFilterModalProps> = ({
                         triggerHaptic('light');
                         setTempChannel(item.value);
                       }}
-                      className={`p-3 rounded-2xl border text-center transition-all cursor-pointer ${
-                        isSelected
+                      className={`p-3 rounded-2xl border text-center transition-all cursor-pointer ${isSelected
                           ? 'bg-rose-50 border-rose-400 text-rose-700 font-bold shadow-xs'
                           : 'bg-slate-50/70 hover:bg-slate-100 border-slate-200/70 text-slate-700'
-                      }`}
+                        }`}
                     >
                       <span className="text-xs sm:text-sm block">{item.label}</span>
                       <span className="text-[10px] text-slate-400 block mt-0.5 font-normal">
@@ -278,11 +275,10 @@ export const DealFilterModal: React.FC<DealFilterModalProps> = ({
                           triggerHaptic('light');
                           setActiveCityTab(reg.city);
                         }}
-                        className={`text-xs px-2.5 py-1 rounded-full whitespace-nowrap font-semibold transition-all cursor-pointer flex items-center gap-1 ${
-                          isTabActive
+                        className={`text-xs px-2.5 py-1 rounded-full whitespace-nowrap font-semibold transition-all cursor-pointer flex items-center gap-1 ${isTabActive
                             ? 'bg-rose-500 text-white shadow-xs'
                             : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/70'
-                        }`}
+                          }`}
                       >
                         <span>{reg.city}</span>
                         {citySelectedCount > 0 && !isTabActive && (
@@ -301,11 +297,10 @@ export const DealFilterModal: React.FC<DealFilterModalProps> = ({
                       <button
                         type="button"
                         onClick={() => handleToggleRegion(activeCityTab, null)}
-                        className={`text-xs p-1.5 rounded-xl text-center font-semibold transition-all col-span-3 sm:col-span-4 cursor-pointer flex items-center justify-center gap-1.5 ${
-                          isAllCitySelected
+                        className={`text-xs p-1.5 rounded-xl text-center font-semibold transition-all col-span-3 sm:col-span-4 cursor-pointer flex items-center justify-center gap-1.5 ${isAllCitySelected
                             ? 'bg-rose-500 text-white font-bold shadow-xs'
                             : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200/50'
-                        }`}
+                          }`}
                       >
                         {isAllCitySelected && <Check className="w-3.5 h-3.5" />}
                         <span>{allCityLabel}</span>
@@ -323,13 +318,12 @@ export const DealFilterModal: React.FC<DealFilterModalProps> = ({
                           type="button"
                           disabled={isAllCitySelected}
                           onClick={() => handleToggleRegion(activeCityTab, dist)}
-                          className={`text-xs p-1.5 rounded-xl text-center transition-all flex items-center justify-center gap-1 ${
-                            isAllCitySelected
+                          className={`text-xs p-1.5 rounded-xl text-center transition-all flex items-center justify-center gap-1 ${isAllCitySelected
                               ? 'bg-slate-100/70 text-slate-400 border border-slate-200/40 cursor-not-allowed opacity-60'
                               : isDistSelected
-                              ? 'bg-rose-500 text-white font-bold shadow-xs cursor-pointer'
-                              : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200/50 cursor-pointer'
-                          }`}
+                                ? 'bg-rose-500 text-white font-bold shadow-xs cursor-pointer'
+                                : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200/50 cursor-pointer'
+                            }`}
                           title={isAllCitySelected ? `已選取「${activeCityTab} (全區門市)」，已自動涵蓋所有行政區` : dist}
                         >
                           {isDistSelected && !isAllCitySelected && <Check className="w-3 h-3 flex-shrink-0" />}
@@ -359,11 +353,10 @@ export const DealFilterModal: React.FC<DealFilterModalProps> = ({
                         triggerHaptic('light');
                         setTempSortBy(s.value);
                       }}
-                      className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
-                        isSelected
+                      className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${isSelected
                           ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
                           : 'bg-slate-50/70 hover:bg-slate-100 text-slate-700 border-slate-200/70'
-                      }`}
+                        }`}
                     >
                       <div className="flex items-center justify-between">
                         <span className="text-xs sm:text-sm font-bold">{s.label}</span>

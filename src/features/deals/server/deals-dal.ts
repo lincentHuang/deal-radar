@@ -100,34 +100,37 @@ async function ensureDealsSeeded(): Promise<void> {
   }
 }
 
-/**
- * 依據篩選條件自遠端資料庫查詢特價情報
- */
-export async function getDeals(filters?: Partial<DealFilterState>): Promise<SmartDeal[]> {
-  await ensureDealsSeeded();
-  await purgeExpiredDeals();
-
-  const records = await prisma.deal.findMany({
-    orderBy: { createdAt: 'desc' },
-  });
-
-  let results = records.map(mapDbDealToSmartDeal);
+export function filterDealsLocally(deals: SmartDeal[], filters?: Partial<DealFilterState>): SmartDeal[] {
+  let results = [...deals];
 
   if (!filters) return results;
 
-  // 1. 搜尋關鍵字過濾 (標題、店家、品項、條件、標籤、卡片)
+  // 1. 多標籤 / 多關鍵字搜尋過濾 (支援空格、逗號區隔，支援標題、店家、品項、條件、標籤、卡片、地區、分類)
   if (filters.searchQuery && filters.searchQuery.trim() !== '') {
-    const q = filters.searchQuery.toLowerCase().trim();
-    results = results.filter((deal) => {
-      return (
-        deal.title.toLowerCase().includes(q) ||
-        deal.merchant.name.toLowerCase().includes(q) ||
-        deal.targetItems.some((item) => item.toLowerCase().includes(q)) ||
-        deal.conditions.some((c) => c.toLowerCase().includes(q)) ||
-        deal.tags.some((t) => t.toLowerCase().includes(q)) ||
-        deal.eligibleCards.some((card) => card.toLowerCase().includes(q))
-      );
-    });
+    const terms = filters.searchQuery
+      .split(/[\s,，、]+/)
+      .map((t) => t.trim().replace(/^#/, '').toLowerCase())
+      .filter(Boolean);
+
+    if (terms.length > 0) {
+      results = results.filter((deal) => {
+        // 多關鍵字採用 AND 邏輯：情報需滿足所有搜尋詞
+        return terms.every((term) => {
+          return (
+            deal.title.toLowerCase().includes(term) ||
+            (deal.subtitle && deal.subtitle.toLowerCase().includes(term)) ||
+            deal.merchant.name.toLowerCase().includes(term) ||
+            (deal.merchant.storeBranches && deal.merchant.storeBranches.toLowerCase().includes(term)) ||
+            deal.targetItems.some((item) => item.toLowerCase().includes(term)) ||
+            deal.conditions.some((c) => c.toLowerCase().includes(term)) ||
+            deal.tags.some((t) => t.toLowerCase().replace(/^#/, '').includes(term)) ||
+            deal.eligibleCards.some((card) => card.toLowerCase().includes(term)) ||
+            (deal.category && deal.category.toLowerCase().includes(term)) ||
+            deal.regions.some((r) => r.toLowerCase().includes(term))
+          );
+        });
+      });
+    }
   }
 
   // 2. 通路類型過濾 (線上 / 實體)
@@ -293,12 +296,45 @@ export async function getDeals(filters?: Partial<DealFilterState>): Promise<Smar
 }
 
 /**
+ * 依據篩選條件自遠端資料庫查詢特價情報
+ */
+export async function getDeals(filters?: Partial<DealFilterState>): Promise<SmartDeal[]> {
+  try {
+    if (!process.env.DATABASE_URL) {
+      console.warn('[Deals-DAL] ⚠️ DATABASE_URL is not set. Using INITIAL_SMART_DEALS fallback.');
+      return filterDealsLocally(INITIAL_SMART_DEALS, filters);
+    }
+
+    await ensureDealsSeeded();
+    await purgeExpiredDeals();
+
+    const records = await prisma.deal.findMany({
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const results = records.map(mapDbDealToSmartDeal);
+    return filterDealsLocally(results, filters);
+  } catch (err) {
+    console.error('[Deals-DAL] ⚠️ Database query failed, falling back to INITIAL_SMART_DEALS:', err);
+    return filterDealsLocally(INITIAL_SMART_DEALS, filters);
+  }
+}
+
+/**
  * 依 ID 取得單筆特價卡片
  */
 export async function getDealById(id: string): Promise<SmartDeal | null> {
-  await ensureDealsSeeded();
-  const record = await prisma.deal.findUnique({ where: { id } });
-  return record ? mapDbDealToSmartDeal(record) : null;
+  try {
+    if (!process.env.DATABASE_URL) {
+      return INITIAL_SMART_DEALS.find((d) => d.id === id) || null;
+    }
+    await ensureDealsSeeded();
+    const record = await prisma.deal.findUnique({ where: { id } });
+    return record ? mapDbDealToSmartDeal(record) : (INITIAL_SMART_DEALS.find((d) => d.id === id) || null);
+  } catch (err) {
+    console.error(`[Deals-DAL] getDealById ${id} error:`, err);
+    return INITIAL_SMART_DEALS.find((d) => d.id === id) || null;
+  }
 }
 
 /**

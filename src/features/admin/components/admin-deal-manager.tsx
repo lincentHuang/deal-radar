@@ -167,11 +167,23 @@ export const AdminDealManager: React.FC<AdminDealManagerProps> = ({ initialDeals
   };
 
   const filteredDeals = deals.filter((d) => {
-    const q = searchQuery.toLowerCase().trim();
-    const matchesQuery = !q || 
-      d.title.toLowerCase().includes(q) || 
-      d.merchant.name.toLowerCase().includes(q) ||
-      d.tags.some((t) => t.toLowerCase().includes(q));
+    const rawQ = searchQuery.trim();
+    let matchesQuery = true;
+    if (rawQ) {
+      const terms = rawQ
+        .split(/[\s,，、]+/)
+        .map((t) => t.trim().replace(/^#/, '').toLowerCase())
+        .filter(Boolean);
+      
+      if (terms.length > 0) {
+        matchesQuery = terms.every((term) =>
+          d.title.toLowerCase().includes(term) ||
+          d.merchant.name.toLowerCase().includes(term) ||
+          d.tags.some((t) => t.toLowerCase().replace(/^#/, '').includes(term)) ||
+          d.targetItems.some((item) => item.toLowerCase().includes(term))
+        );
+      }
+    }
     
     const matchesCategory = categoryFilter === 'all' || d.category === categoryFilter;
     const matchesSource = sourceFilter === 'all' || d.source === sourceFilter;

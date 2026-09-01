@@ -3,6 +3,9 @@
 import React from 'react';
 import { usePathname } from 'next/navigation';
 import { AppHeader } from './app-header';
+import { MobileDock } from './mobile-dock';
+import { SearchModal } from '@/features/deals/components/search-modal';
+import { MobileAccountSheet } from '@/features/auth/components/mobile-account-sheet';
 
 interface AppLayoutShellProps {
   children: React.ReactNode;
@@ -26,10 +29,19 @@ export const AppLayoutShell: React.FC<AppLayoutShellProps> = ({ children }) => {
       {/* 全域前台頂部導覽列 (含 Pinterest 泡泡風搜尋列與標籤導覽) */}
       <AppHeader />
 
-      {/* 主內容區 */}
-      <main className="flex-1 w-full">
+      {/* 主內容區 (手機版預留 pb-24 避免被底部 Dock 遮擋) */}
+      <main className="flex-1 w-full pb-24 sm:pb-0">
         {children}
       </main>
+
+      {/* 手機版專屬底部 Dock 導覽列 */}
+      <MobileDock />
+
+      {/* 全域搜尋 Modal */}
+      <SearchModal />
+
+      {/* 手機版專屬會員選單 Sheet */}
+      <MobileAccountSheet />
 
       {/* 前台頁尾 */}
       <footer className="w-full bg-white border-t border-slate-100 py-8 text-center text-xs text-slate-400 mt-auto">
@@ -44,3 +56,4 @@ export const AppLayoutShell: React.FC<AppLayoutShellProps> = ({ children }) => {
     </>
   );
 };
+

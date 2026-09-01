@@ -3,7 +3,7 @@
 import React, { useState, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAtom } from 'jotai';
-import { subscribedTagsAtom, dealFiltersAtom } from '@/features/subscriptions/atoms/subscription-atoms';
+import { subscribedTagsAtom, dealFiltersAtom, isFilterModalOpenAtom } from '@/features/subscriptions/atoms/subscription-atoms';
 import { 
   Sparkles, 
   SlidersHorizontal,
@@ -17,7 +17,7 @@ import { RecommendedTagsModal } from '@/features/subscriptions/components/recomm
 export const SubHeaderTagNav: React.FC = () => {
   const [subscribedTags] = useAtom(subscribedTagsAtom);
   const [filters, setFilters] = useAtom(dealFiltersAtom);
-  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+  const [isFilterModalOpen, setIsFilterModalOpen] = useAtom(isFilterModalOpenAtom);
   const [isTagModalOpen, setIsTagModalOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
@@ -153,8 +153,8 @@ export const SubHeaderTagNav: React.FC = () => {
             )}
           </div>
 
-          {/* 右側：整合型進階 Filter 篩選按鈕 (支援 Active 高亮模式) */}
-          <div className="flex items-center pl-3 sm:pl-4 flex-shrink-0 border-l border-slate-100">
+          {/* 右側：整合型進階 Filter 篩選按鈕 (電腦版顯示，手機版已整合至底部 Dock) */}
+          <div className="hidden sm:flex items-center pl-3 sm:pl-4 flex-shrink-0 border-l border-slate-100">
             <button
               type="button"
               onClick={() => {

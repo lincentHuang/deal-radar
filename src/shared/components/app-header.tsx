@@ -23,7 +23,8 @@ export const AppHeader: React.FC = () => {
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    setFilters((prev) => ({ ...prev, searchQuery: value }));
+    // 搜尋時標籤自動切換為全部 (selectedTag: null)
+    setFilters((prev) => ({ ...prev, searchQuery: value, selectedTag: null }));
     // 若在商家頁或其他頁面搜尋，自動導回首頁呈現搜尋結果
     if (pathname !== '/' && value.trim().length > 0) {
       router.push('/');
@@ -53,18 +54,18 @@ export const AppHeader: React.FC = () => {
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-rose-500 via-rose-600 to-orange-400 flex items-center justify-center text-white shadow-md group-hover:scale-105 transition-transform">
               <Sparkles className="w-5 h-5 animate-pulse" />
             </div>
-            <div className="hidden sm:flex flex-col">
+            <div className="flex flex-col">
               <span className="text-base font-black tracking-tight text-slate-900 group-hover:text-rose-600 transition-colors leading-tight">
                 特價情報站
               </span>
-              <span className="text-[10px] text-slate-400 font-semibold tracking-wider uppercase">
+              <span className="text-[10px] text-slate-400 font-semibold tracking-wider uppercase hidden sm:inline">
                 Deal Aggregator
               </span>
             </div>
           </Link>
 
-          {/* 2. Header 搜尋輸入框 (Pinterest 泡泡風) */}
-          <div className="flex-1 max-w-xl relative">
+          {/* 2. Header 搜尋輸入框 (電腦版顯示，手機版整合至底部 Dock 與專屬 Search Modal) */}
+          <div className="hidden sm:block flex-1 max-w-xl relative">
             <div className="relative flex items-center w-full">
               <Search className="absolute left-3.5 sm:left-4 w-4 h-4 text-slate-400 pointer-events-none transition-colors group-focus-within:text-rose-500" />
               <input
@@ -92,7 +93,7 @@ export const AppHeader: React.FC = () => {
             </div>
           </div>
 
-          {/* 3. 導覽快捷鍵 */}
+          {/* 3. 導覽快捷鍵 (已移除管理與小編按鈕，統一於會員選單維護) */}
           <nav className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
             {/* 探索標籤按鈕 (點擊彈出推薦標籤池) */}
             <button
@@ -105,38 +106,13 @@ export const AppHeader: React.FC = () => {
               className="text-xs font-bold px-3 sm:px-3.5 py-2 rounded-full transition-all flex items-center gap-1.5 bg-rose-50 hover:bg-rose-100/80 text-rose-600 border border-rose-200/60 shadow-xs active:scale-95 cursor-pointer"
             >
               <Flame className="w-4 h-4 text-rose-500" />
-              <span className="hidden sm:inline">探索標籤</span>
+              <span>探索標籤</span>
             </button>
-            
-            <Link
-              href="/merchant"
-              className={`text-xs font-bold px-3 sm:px-3.5 py-2 rounded-full transition-all flex items-center gap-1.5 border shadow-xs ${
-                pathname === '/merchant'
-                  ? 'bg-emerald-50 text-emerald-700 border-emerald-300 font-extrabold'
-                  : 'bg-white text-slate-700 hover:text-emerald-700 hover:bg-slate-50 border-slate-200/80'
-              }`}
-            >
-              <Store className="w-4 h-4 text-emerald-600" />
-              <span className="hidden sm:inline">官方小編</span>
-              <span className="sm:hidden">小編</span>
-            </Link>
 
-            {/* 管理後台 (最高管理權限) */}
-            <Link
-              href="/admin"
-              className={`text-xs font-bold px-3 sm:px-3.5 py-2 rounded-full transition-all flex items-center gap-1.5 border shadow-xs ${
-                pathname === '/admin'
-                  ? 'bg-slate-900 text-rose-400 border-slate-900 font-extrabold'
-                  : 'bg-white text-slate-700 hover:text-rose-600 hover:bg-slate-50 border-slate-200/80'
-              }`}
-            >
-              <ShieldCheck className="w-4 h-4 text-rose-500" />
-              <span className="hidden sm:inline">管理後台</span>
-              <span className="sm:hidden">管理</span>
-            </Link>
-
-            {/* 4. 會員選單與登入/註冊入口 */}
-            <UserMenuDropdown />
+            {/* 4. 會員選單與登入/註冊入口 (電腦版顯示，手機版同步支援底部 Dock) */}
+            <div className="hidden sm:block">
+              <UserMenuDropdown />
+            </div>
           </nav>
         </div>
 

@@ -88,11 +88,23 @@ export const DealMasonryFeed: React.FC<DealMasonryFeedProps> = ({ initialDeals }
     ? subscribedTags.includes(filters.selectedTag.startsWith('#') ? filters.selectedTag : `#${filters.selectedTag}`)
     : false;
 
-  // 檢查搜尋詞是否可作為標籤訂閱
-  const searchMatchingTag = filters.searchQuery.trim()
-    ? (filters.searchQuery.startsWith('#') ? filters.searchQuery.trim() : `#${filters.searchQuery.trim()}`)
-    : null;
-  const isSearchTagSubscribed = searchMatchingTag ? subscribedTags.includes(searchMatchingTag) : false;
+  // 解析多關鍵字 / 標籤 Token
+  const searchTokens = filters.searchQuery
+    ? filters.searchQuery
+        .split(/[\s,，、]+/)
+        .map((t) => t.trim().replace(/^#/, ''))
+        .filter(Boolean)
+    : [];
+
+  const handleRemoveSearchToken = (tokenToRemove: string) => {
+    triggerHaptic('light');
+    const remainingTokens = searchTokens.filter((t) => t !== tokenToRemove);
+    setFilters((prev) => ({
+      ...prev,
+      searchQuery: remainingTokens.join(' '),
+      selectedTag: null,
+    }));
+  };
 
   // 建立當前有效 Tab 清單以支援手勢左右滑動切換 (All ➔ 我的標籤 ➔ 各自訂閱標籤)
   const allTabs: (string | null)[] = [null, '__MY_TAGS__', ...subscribedTags];
@@ -104,7 +116,30 @@ export const DealMasonryFeed: React.FC<DealMasonryFeedProps> = ({ initialDeals }
       : allTabs.indexOf(filters.selectedTag.startsWith('#') ? filters.selectedTag : `#${filters.selectedTag}`);
   const safeTabIdx = currentTabIdx >= 0 ? currentTabIdx : 0;
 
-  // 手勢左右滑動偵測 (支援手機端左滑看下一 Tab、右滑看上一 Tab)
+  // 滑動與轉場狀態
+  const [dragOffset, setDragOffset] = useState<number>(0);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [slideDirection, setSlideDirection] = useState<'left' | 'right' | null>(null);
+  const prevTagRef = React.useRef<string | null>(filters.selectedTag);
+
+  // 監聽標籤切換方向（點擊 SubHeader 標籤或手勢切換時觸發平滑全螢幕滑入轉場）
+  useEffect(() => {
+    const prevIdx = prevTagRef.current === null
+      ? 0
+      : prevTagRef.current === '__MY_TAGS__'
+        ? 1
+        : allTabs.indexOf(prevTagRef.current.startsWith('#') ? prevTagRef.current : `#${prevTagRef.current}`);
+    
+    const validPrevIdx = prevIdx >= 0 ? prevIdx : 0;
+    if (safeTabIdx > validPrevIdx) {
+      setSlideDirection('left');
+    } else if (safeTabIdx < validPrevIdx) {
+      setSlideDirection('right');
+    }
+    prevTagRef.current = filters.selectedTag;
+  }, [filters.selectedTag, safeTabIdx, allTabs]);
+
+  // 手勢左右滑動偵測 (支援手機端左滑看下一 Tab、右滑看上一 Tab，具備跟手阻尼與滿幅滑動感)
   const touchStartRef = React.useRef<{ x: number; y: number; time: number } | null>(null);
 
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -117,37 +152,83 @@ export const DealMasonryFeed: React.FC<DealMasonryFeedProps> = ({ initialDeals }
     }
   };
 
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!touchStartRef.current || e.touches.length === 0) return;
+    const currentX = e.touches[0].clientX;
+    const currentY = e.touches[0].clientY;
+    const deltaX = currentX - touchStartRef.current.x;
+    const deltaY = currentY - touchStartRef.current.y;
+
+    // 水平滑動角度優先判斷 (防垂直網頁捲動干擾)
+    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 8) {
+      setIsDragging(true);
+      // 首尾邊界加上彈性阻尼 (Rubber-band effect)
+      if ((safeTabIdx === 0 && deltaX > 0) || (safeTabIdx === allTabs.length - 1 && deltaX < 0)) {
+        setDragOffset(deltaX * 0.28);
+      } else {
+        setDragOffset(deltaX);
+      }
+    }
+  };
+
   const handleTouchEnd = (e: React.TouchEvent) => {
-    if (!touchStartRef.current || e.changedTouches.length === 0) return;
-    const deltaX = e.changedTouches[0].clientX - touchStartRef.current.x;
-    const deltaY = e.changedTouches[0].clientY - touchStartRef.current.y;
+    if (!touchStartRef.current) return;
     const deltaTime = Date.now() - touchStartRef.current.time;
     touchStartRef.current = null;
 
-    // 判斷條件：水平滑動超過 40px，水平位移明顯大於垂直位移（防垂直滾動誤觸），且於 600ms 內完成手勢
-    if (Math.abs(deltaX) > 40 && Math.abs(deltaX) > Math.abs(deltaY) * 1.25 && deltaTime < 600) {
-      if (deltaX < 0) {
-        // 向左滑動 ➔ 切換至下一個 Tab
-        if (safeTabIdx < allTabs.length - 1) {
-          triggerHaptic('light');
-          setFilters((prev) => ({ ...prev, selectedTag: allTabs[safeTabIdx + 1] }));
-        }
-      } else {
-        // 向右滑動 ➔ 切換至上一個 Tab
-        if (safeTabIdx > 0) {
-          triggerHaptic('light');
-          setFilters((prev) => ({ ...prev, selectedTag: allTabs[safeTabIdx - 1] }));
+    if (isDragging) {
+      // 判定切換門檻 (滑動位移超過 45px 或快速甩動)
+      const isFastSwipe = deltaTime < 250 && Math.abs(dragOffset) > 25;
+      const isOverThreshold = Math.abs(dragOffset) > 48;
+
+      if (isOverThreshold || isFastSwipe) {
+        if (dragOffset < 0) {
+          // 向左滑動 ➔ 切換至下一個 Tab (畫面由右向左滑入)
+          if (safeTabIdx < allTabs.length - 1) {
+            triggerHaptic('light');
+            setSlideDirection('left');
+            setFilters((prev) => ({ ...prev, selectedTag: allTabs[safeTabIdx + 1] }));
+          }
+        } else {
+          // 向右滑動 ➔ 切換至上一個 Tab (畫面由左向右滑入)
+          if (safeTabIdx > 0) {
+            triggerHaptic('light');
+            setSlideDirection('right');
+            setFilters((prev) => ({ ...prev, selectedTag: allTabs[safeTabIdx - 1] }));
+          }
         }
       }
     }
+
+    setDragOffset(0);
+    setIsDragging(false);
   };
 
   return (
     <section
       onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
-      className="w-full max-w-7xl mx-auto px-2.5 sm:px-6 lg:px-8 py-4 sm:py-6 touch-pan-y"
+      className="w-full max-w-7xl mx-auto px-2.5 sm:px-6 lg:px-8 py-4 sm:py-6 touch-pan-y overflow-hidden select-none sm:select-auto"
     >
+      {/* 支援手指實時跟手滑動與 Tab 切換全螢幕流暢轉場容器 */}
+      <div
+        key={filters.selectedTag ?? 'all'}
+        className={`w-full will-change-transform ${
+          !isDragging && slideDirection === 'left'
+            ? 'animate-slide-in-right'
+            : !isDragging && slideDirection === 'right'
+            ? 'animate-slide-in-left'
+            : ''
+        }`}
+        style={{
+          transform: isDragging ? `translateX(${dragOffset}px)` : undefined,
+          transition: isDragging
+            ? 'none'
+            : 'transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.22s ease',
+          opacity: isDragging ? Math.max(0.6, 1 - Math.abs(dragOffset) / 550) : 1,
+        }}
+      >
       {/* 1. 當前主題/標籤畫板 Header */}
       {filters.selectedTag === '__MY_TAGS__' ? (
         <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 bg-gradient-to-r from-rose-50 via-orange-50 to-amber-50 rounded-3xl border border-rose-100/80 shadow-xs animate-fadeIn">
@@ -239,46 +320,64 @@ export const DealMasonryFeed: React.FC<DealMasonryFeedProps> = ({ initialDeals }
         </div>
       ) : null}
 
-      {/* 2. 搜尋時若有對應關鍵字，顯示標籤訂閱推薦橫幅與當前搜尋關鍵字標籤 */}
-      {filters.searchQuery && !filters.selectedTag ? (
+      {/* 2. 搜尋時若有對應關鍵字，顯示標籤訂閱推薦橫幅與當前搜尋多關鍵字標籤 */}
+      {filters.searchQuery && !filters.selectedTag && searchTokens.length > 0 ? (
         <div className="mb-5 p-3.5 bg-gradient-to-r from-rose-50 to-orange-50 rounded-2xl border border-rose-200/70 flex flex-wrap items-center justify-between gap-3 animate-fadeIn shadow-xs">
-          <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
-            <Tag className="w-4 h-4 text-rose-500" />
-            <span>
-              正在搜尋「{filters.searchQuery}」相關情報
-            </span>
+          <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-slate-800">
+            <div className="flex items-center gap-1.5 text-rose-600 mr-1">
+              <Tag className="w-4 h-4 text-rose-500 flex-shrink-0" />
+              <span>正在搜尋：</span>
+            </div>
+            
+            {/* 每個關鍵字 Token 獨立晶片 */}
+            {searchTokens.map((token) => (
+              <span
+                key={token}
+                className="inline-flex items-center gap-1 bg-white px-2.5 py-1 rounded-full text-slate-900 border border-rose-200 shadow-xs font-bold"
+              >
+                <span>#{token}</span>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveSearchToken(token)}
+                  className="w-3.5 h-3.5 rounded-full bg-slate-200 hover:bg-rose-200 text-slate-600 hover:text-rose-700 flex items-center justify-center text-[9px] transition-colors cursor-pointer"
+                  title={`移除 #${token}`}
+                >
+                  ✕
+                </button>
+              </span>
+            ))}
+
+            {/* 清除全部搜尋詞按鈕 */}
             <button
               type="button"
               onClick={() => {
                 triggerHaptic('light');
                 setFilters((prev) => ({ ...prev, searchQuery: '' }));
               }}
-              className="w-4 h-4 rounded-full bg-rose-200 hover:bg-rose-300 text-rose-800 flex items-center justify-center text-[10px] ml-1 transition-colors cursor-pointer"
-              title="清除關鍵字"
+              className="text-xs text-slate-400 hover:text-slate-700 underline font-semibold ml-1 cursor-pointer"
             >
-              ✕
+              清除全部
             </button>
           </div>
-          <button
-            type="button"
-            onClick={() => handleToggleCurrentTagSubscription(searchMatchingTag!)}
-            className={`text-xs px-3.5 py-1.5 rounded-full font-bold transition-all active:scale-95 flex items-center gap-1 shadow-xs cursor-pointer ${isSearchTagSubscribed
-              ? 'bg-white text-rose-600 border border-rose-200'
-              : 'bg-rose-500 hover:bg-rose-600 text-white'
-              }`}
-          >
-            {isSearchTagSubscribed ? (
-              <>
-                <Check className="w-3 h-3" />
-                <span>已在上方標籤列</span>
-              </>
-            ) : (
-              <>
+
+          {/* 快速訂閱第一個未訂閱的搜尋關鍵字至上方 */}
+          {(() => {
+            const firstUnsubscribedToken = searchTokens.find(
+              (token) => !subscribedTags.includes(`#${token}`) && !subscribedTags.includes(token)
+            );
+            if (!firstUnsubscribedToken) return null;
+
+            return (
+              <button
+                type="button"
+                onClick={() => handleToggleCurrentTagSubscription(firstUnsubscribedToken)}
+                className="text-xs px-3.5 py-1.5 rounded-full font-bold transition-all active:scale-95 flex items-center gap-1 shadow-xs cursor-pointer bg-rose-500 hover:bg-rose-600 text-white"
+              >
                 <Plus className="w-3 h-3" />
-                <span>⭐ 訂閱「{searchMatchingTag}」至上方</span>
-              </>
-            )}
-          </button>
+                <span>⭐ 訂閱「#{firstUnsubscribedToken}」至上方</span>
+              </button>
+            );
+          })()}
         </div>
       ) : null}
 
@@ -356,6 +455,7 @@ export const DealMasonryFeed: React.FC<DealMasonryFeedProps> = ({ initialDeals }
           ))}
         </div>
       )}
+      </div>
 
       {/* 推薦標籤彈窗 */}
       <RecommendedTagsModal

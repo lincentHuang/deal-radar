@@ -106,24 +106,42 @@ async function ensureCampaignsSeeded(): Promise<void> {
 }
 
 export async function getAdCampaigns(merchantName?: string): Promise<AdCampaign[]> {
-  await ensureCampaignsSeeded();
-  
-  let where: any = {};
-  if (merchantName && merchantName !== 'all') {
-    where = {
-      merchantName: {
-        contains: merchantName.trim(),
-        mode: 'insensitive',
-      },
-    };
+  try {
+    if (!process.env.DATABASE_URL) {
+      console.warn('[Ads-DAL] ⚠️ DATABASE_URL is not set. Using INITIAL_CAMPAIGNS fallback.');
+      let list = INITIAL_CAMPAIGNS.map(mapDbCampaignToAdCampaign);
+      if (merchantName && merchantName !== 'all') {
+        list = list.filter((c) => c.merchantName.toLowerCase().includes(merchantName.trim().toLowerCase()));
+      }
+      return list;
+    }
+
+    await ensureCampaignsSeeded();
+    
+    let where: any = {};
+    if (merchantName && merchantName !== 'all') {
+      where = {
+        merchantName: {
+          contains: merchantName.trim(),
+          mode: 'insensitive',
+        },
+      };
+    }
+
+    const records = await prisma.adCampaign.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return records.map(mapDbCampaignToAdCampaign);
+  } catch (err) {
+    console.error('[Ads-DAL] ⚠️ Database query failed, falling back to INITIAL_CAMPAIGNS:', err);
+    let list = INITIAL_CAMPAIGNS.map(mapDbCampaignToAdCampaign);
+    if (merchantName && merchantName !== 'all') {
+      list = list.filter((c) => c.merchantName.toLowerCase().includes(merchantName.trim().toLowerCase()));
+    }
+    return list;
   }
-
-  const records = await prisma.adCampaign.findMany({
-    where,
-    orderBy: { createdAt: 'desc' },
-  });
-
-  return records.map(mapDbCampaignToAdCampaign);
 }
 
 export async function createAdCampaign(input: CreateAdCampaignInput): Promise<AdCampaign> {

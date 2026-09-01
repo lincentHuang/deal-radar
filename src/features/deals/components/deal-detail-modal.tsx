@@ -9,19 +9,15 @@ import { useAuth } from '@/features/auth/hooks/use-auth';
 import { calculateDiscount, formatPrice, formatRemainingTime } from '@/shared/lib/utils';
 import { BubbleBadge } from '@/shared/components/ui/bubble-badge';
 import { BubbleButton } from '@/shared/components/ui/bubble-button';
-import { 
-  X, 
-  Store, 
-  MapPin, 
-  CreditCard, 
-  CheckCircle2, 
-  Clock, 
-  ExternalLink, 
-  TrendingDown, 
-  Bell, 
-  Share2, 
-  QrCode, 
-  ShieldCheck, 
+import {
+  X,
+  Store,
+  MapPin,
+  CreditCard,
+  CheckCircle2,
+  Clock,
+  ExternalLink,
+  Share2,
   Flame,
   Tag as TagIcon,
   Globe,
@@ -32,7 +28,6 @@ import {
   MessageCircle,
   Link2,
   Maximize2,
-  ZoomIn,
   Image as ImageIcon,
   ChevronLeft,
   ChevronRight,
@@ -46,7 +41,6 @@ export const DealDetailModal: React.FC = () => {
   const [subscribedTags] = useAtom(subscribedTagsAtom);
   const [bookmarkedDealIds] = useAtom(bookmarkedDealIdsAtom);
   const { toggleBookmark, updateTags } = useAuth();
-  const [showQrVoucher, setShowQrVoucher] = useState<boolean>(false);
   const [copiedUrl, setCopiedUrl] = useState<boolean>(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number>(0);
   const [showLightbox, setShowLightbox] = useState<boolean>(false);
@@ -62,7 +56,6 @@ export const DealDetailModal: React.FC = () => {
 
   const handleClose = () => {
     setActiveDeal(null);
-    setShowQrVoucher(false);
     setCopiedUrl(false);
     setShowLightbox(false);
   };
@@ -72,8 +65,8 @@ export const DealDetailModal: React.FC = () => {
   const discountInfo = calculateDiscount(activeDeal.originalPrice, activeDeal.discountPrice);
   const timeInfo = formatRemainingTime(activeDeal.endDate, activeDeal.startDate);
 
-  const imagesList = activeDeal.images && activeDeal.images.length > 0 
-    ? activeDeal.images 
+  const imagesList = activeDeal.images && activeDeal.images.length > 0
+    ? activeDeal.images
     : (activeDeal.imageUrl ? [activeDeal.imageUrl] : []);
 
   const currentDisplayImage = imagesList[selectedImageIndex] || activeDeal.imageUrl;
@@ -110,8 +103,8 @@ export const DealDetailModal: React.FC = () => {
         spread: 60,
         origin: { y: 0.7 },
       });
-    } catch (e) {}
-    
+    } catch (e) { }
+
     await copyToClipboard(
       `🔥【特價情報】${activeDeal.title}\n💰 優惠價：${formatPrice(activeDeal.discountPrice || 0)}\n🎯 條件：${activeDeal.conditions.join('、')}\n📍 地點：${activeDeal.regions.join('、')}${activeDeal.sourceUrl ? `\n🔗 來源網址：${activeDeal.sourceUrl}` : ''}`
     );
@@ -132,7 +125,7 @@ export const DealDetailModal: React.FC = () => {
           spread: 45,
           origin: { y: 0.5 },
         });
-      } catch (e) {}
+      } catch (e) { }
       const newTags = [...subscribedTags, tag];
       await updateTags(newTags);
     }
@@ -146,7 +139,7 @@ export const DealDetailModal: React.FC = () => {
         spread: 50,
         origin: { y: 0.3 },
       });
-    } catch (e) {}
+    } catch (e) { }
     const newTags = Array.from(new Set([...subscribedTags, ...activeDeal.tags]));
     await updateTags(newTags);
     alert('🔔 已成功追蹤此優惠的所有關鍵標籤至上方導覽列！');
@@ -160,7 +153,7 @@ export const DealDetailModal: React.FC = () => {
           <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm animate-fadeIn" />
 
           {/* Radix Dialog 內容本體 */}
-          <Dialog.Content 
+          <Dialog.Content
             aria-describedby="dialog-deal-detail-desc"
             className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[calc(100%-2rem)] max-w-2xl max-h-[90vh] bg-white rounded-3xl shadow-2xl border border-slate-100 flex flex-col overflow-hidden animate-scaleUp focus:outline-none"
           >
@@ -177,10 +170,10 @@ export const DealDetailModal: React.FC = () => {
 
             {/* 滾動內容容器 */}
             <div className="overflow-y-auto no-scrollbar p-5 sm:p-7 flex-1">
-              
+
               {/* 📸 頂部高畫質大圖展示區 (自適應原始圖片真實比例，支援放大檢視) */}
               <div className="relative w-full rounded-2xl sm:rounded-3xl overflow-hidden bg-slate-900/5 mb-5 border border-slate-100 shadow-2xs group flex items-center justify-center">
-                <div 
+                <div
                   onClick={() => setShowLightbox(true)}
                   className="relative w-full max-h-[500px] sm:max-h-[580px] overflow-hidden flex items-center justify-center bg-slate-950/5 cursor-zoom-in p-1"
                   title="點擊放大檢視清晰大圖"
@@ -242,11 +235,10 @@ export const DealDetailModal: React.FC = () => {
                         key={idx}
                         type="button"
                         onClick={() => setSelectedImageIndex(idx)}
-                        className={`relative w-12 h-12 rounded-lg overflow-hidden shrink-0 border-2 transition-all ${
-                          selectedImageIndex === idx
+                        className={`relative w-12 h-12 rounded-lg overflow-hidden shrink-0 border-2 transition-all ${selectedImageIndex === idx
                             ? 'border-rose-500 ring-2 ring-rose-200 scale-105 shadow-xs'
                             : 'border-transparent opacity-70 hover:opacity-100'
-                        }`}
+                          }`}
                       >
                         <img src={img} alt={`縮圖 ${idx + 1}`} className="w-full h-full object-cover" />
                       </button>
@@ -334,14 +326,14 @@ export const DealDetailModal: React.FC = () => {
 
               {/* 7 大要素詳細區塊 */}
               <div className="space-y-4 mb-6">
-                
+
                 {/* 🏷️ 優惠標籤清單與互動話題專區 */}
                 {activeDeal.tags && activeDeal.tags.length > 0 && (
                   <div className="p-4 bg-gradient-to-br from-rose-50/50 via-purple-50/30 to-blue-50/30 rounded-2xl border border-rose-100/80">
                     <div className="flex items-center justify-between gap-2 mb-2.5">
                       <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
                         <TagIcon className="w-4 h-4 text-rose-500" />
-                        <span>特惠關聯標籤 (點擊可快速訂閱 / 查看)</span>
+                        <span>特惠關聯標籤</span>
                         <span className="text-[10px] bg-rose-100 text-rose-700 font-semibold px-2 py-0.5 rounded-full">
                           {activeDeal.tags.length} 個標籤
                         </span>
@@ -354,20 +346,19 @@ export const DealDetailModal: React.FC = () => {
                         一鍵全追蹤
                       </button>
                     </div>
-                    
+
                     <div className="flex flex-wrap gap-2">
                       {activeDeal.tags.map((tag, idx) => {
                         const cleanTagName = tag.replace(/^#/, '');
                         const isSubscribed = subscribedTags.includes(tag);
 
                         return (
-                          <div 
+                          <div
                             key={idx}
-                            className={`group inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-full text-xs transition-all shadow-2xs ${
-                              isSubscribed
+                            className={`group inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-full text-xs transition-all shadow-2xs ${isSubscribed
                                 ? 'bg-rose-500 text-white font-bold shadow-rose-200'
                                 : 'bg-white hover:bg-slate-100 text-slate-700 font-medium border border-slate-200'
-                            }`}
+                              }`}
                           >
                             {/* 點擊切換訂閱狀態 */}
                             <button
@@ -391,9 +382,8 @@ export const DealDetailModal: React.FC = () => {
                                 triggerHaptic('light');
                                 handleClose();
                               }}
-                              className={`p-0.5 rounded-full transition-colors ${
-                                isSubscribed ? 'hover:bg-white/20 text-white' : 'hover:bg-slate-200 text-slate-400 hover:text-slate-700'
-                              }`}
+                              className={`p-0.5 rounded-full transition-colors ${isSubscribed ? 'hover:bg-white/20 text-white' : 'hover:bg-slate-200 text-slate-400 hover:text-slate-700'
+                                }`}
                               title={`瀏覽更多 ${tag} 相關情報`}
                             >
                               <ExternalLink className="w-2.5 h-2.5" />
@@ -533,147 +523,35 @@ export const DealDetailModal: React.FC = () => {
                     </div>
                   )}
                 </div>
-
-                {/* 📈 歷史價格趨勢與假促銷辨識 */}
-                {activeDeal.priceHistory && activeDeal.priceHistory.length > 0 && (
-                  <div className="p-4 bg-blue-50/50 rounded-2xl border border-blue-100">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2 text-xs font-bold text-blue-800">
-                        <TrendingDown className="w-4 h-4 text-blue-600" />
-                        <span>歷史價格走勢分析 (防坑假降價)</span>
-                      </div>
-                      {activeDeal.priceDropAlert?.isLowest90Days && (
-                        <span className="text-xs bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
-                          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> 近 90 天最低價
-                        </span>
-                      )}
-                    </div>
-
-                    {/* 走勢長條圖模擬 */}
-                    <div className="flex items-end gap-2 h-24 pt-4 px-2 bg-white/80 rounded-xl border border-blue-100">
-                      {activeDeal.priceHistory.map((pt, i) => {
-                        const maxPrice = Math.max(...activeDeal.priceHistory!.map((p) => p.price));
-                        const heightPercent = Math.round((pt.price / maxPrice) * 100);
-                        const isCurrent = i === activeDeal.priceHistory!.length - 1;
-
-                        return (
-                          <div key={i} className="flex-1 flex flex-col items-center gap-1 h-full justify-end">
-                            <span className="text-[10px] font-semibold text-slate-600">
-                              ${pt.price}
-                            </span>
-                            <div 
-                              style={{ height: `${heightPercent}%` }} 
-                              className={`w-full max-w-[28px] rounded-t-lg transition-all ${
-                                isCurrent ? 'bg-rose-500' : 'bg-blue-300'
-                              }`}
-                            />
-                            <span className="text-[10px] text-slate-400">
-                              {pt.date}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {activeDeal.priceDropAlert?.note && (
-                      <p className="text-xs text-blue-700 mt-2 font-medium">
-                        💡 {activeDeal.priceDropAlert.note}
-                      </p>
-                    )}
-                  </div>
-                )}
               </div>
+            </div>
 
-              {/* 門市 QR Code 現場核銷展示 */}
-              {showQrVoucher && (
-                <div className="p-5 bg-slate-900 text-white rounded-2xl mb-6 text-center animate-fadeIn">
-                  <div className="text-sm font-bold mb-2">出示此核銷條碼供店家掃描</div>
-                  <div className="bg-white p-4 rounded-xl inline-block shadow-lg my-2">
-                    <div className="w-36 h-36 border-2 border-dashed border-slate-400 flex flex-col items-center justify-center text-slate-900">
-                      <QrCode className="w-24 h-24 text-slate-900" />
-                      <span className="text-[10px] font-mono mt-1">DEAL-8829-PX</span>
-                    </div>
-                  </div>
-                  <div className="text-xs text-slate-300">
-                    核銷序號：<span className="font-mono text-amber-400 font-bold text-sm">DEAL-8829-PX</span>
-                  </div>
-                </div>
-              )}
+            {/* 📌 固定底部操作列 (Fixed Footer) */}
+            <div className="px-5 py-3.5 sm:px-7 sm:py-4 bg-white/95 backdrop-blur-md border-t border-slate-100 flex items-center justify-between gap-3 shrink-0">
+              <div className="flex items-center gap-2.5 w-full">
+                <BubbleButton
+                  type="button"
+                  variant={bookmarkedDealIds.includes(activeDeal.id) ? "secondary" : "outline"}
+                  size="md"
+                  className="flex-1 justify-center"
+                  leftIcon={<Bookmark className={`w-4 h-4 ${bookmarkedDealIds.includes(activeDeal.id) ? 'fill-rose-500 text-rose-500' : 'text-rose-500'}`} />}
+                  onClick={async () => {
+                    await toggleBookmark(activeDeal.id);
+                  }}
+                >
+                  {bookmarkedDealIds.includes(activeDeal.id) ? '已收藏' : '收藏情報'}
+                </BubbleButton>
 
-              {/* 底部功能按鈕 */}
-              <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-slate-100">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <BubbleButton
-                    type="button"
-                    variant={bookmarkedDealIds.includes(activeDeal.id) ? "secondary" : "outline"}
-                    size="md"
-                    leftIcon={<Bookmark className={`w-4 h-4 ${bookmarkedDealIds.includes(activeDeal.id) ? 'fill-rose-500 text-rose-500' : 'text-rose-500'}`} />}
-                    onClick={async () => {
-                      await toggleBookmark(activeDeal.id);
-                    }}
-                  >
-                    {bookmarkedDealIds.includes(activeDeal.id) ? '已收藏' : '收藏情報'}
-                  </BubbleButton>
-                  <BubbleButton
-                    type="button"
-                    variant="outline"
-                    size="md"
-                    leftIcon={<Bell className="w-4 h-4 text-rose-500" />}
-                    onClick={handleSubscribeAllTags}
-                  >
-                    追蹤相關標籤
-                  </BubbleButton>
-                  <BubbleButton
-                    type="button"
-                    variant="outline"
-                    size="md"
-                    leftIcon={<Share2 className="w-4 h-4 text-slate-600" />}
-                    onClick={handleCopyDeal}
-                  >
-                    一鍵分享
-                  </BubbleButton>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {activeDeal.channelType === 'offline' && (
-                    <BubbleButton
-                      type="button"
-                      variant="mint"
-                      size="md"
-                      leftIcon={<QrCode className="w-4 h-4" />}
-                      onClick={() => {
-                        triggerHaptic('medium');
-                        setShowQrVoucher(!showQrVoucher);
-                      }}
-                    >
-                      {showQrVoucher ? '收起兌換碼' : '現場出示兌換'}
-                    </BubbleButton>
-                  )}
-
-                  {activeDeal.sourceUrl ? (
-                    <a
-                      href={activeDeal.sourceUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={() => triggerHaptic('success')}
-                      className="inline-flex items-center justify-center bg-rose-500 hover:bg-rose-600 text-white font-semibold text-sm px-5 py-2.5 rounded-full gap-2 shadow-xs active:scale-95 transition-all"
-                      title="快速導航至對應來源連結（方便查驗）"
-                    >
-                      <span>{activeDeal.channelType === 'offline' ? '前往官方貼文 / 來源頁' : '前往線上特價'}</span>
-                      <ExternalLink className="w-4 h-4" />
-                    </a>
-                  ) : (
-                    activeDeal.channelType === 'online' && (
-                      <button
-                        type="button"
-                        disabled
-                        className="inline-flex items-center justify-center bg-slate-200 text-slate-400 font-semibold text-sm px-5 py-2.5 rounded-full gap-2 cursor-not-allowed"
-                      >
-                        <span>未提供外部連結</span>
-                      </button>
-                    )
-                  )}
-                </div>
+                <BubbleButton
+                  type="button"
+                  variant="outline"
+                  size="md"
+                  className="flex-1 justify-center"
+                  leftIcon={<Share2 className="w-4 h-4 text-slate-600" />}
+                  onClick={handleCopyDeal}
+                >
+                  一鍵分享
+                </BubbleButton>
               </div>
             </div>
           </Dialog.Content>
@@ -684,7 +562,7 @@ export const DealDetailModal: React.FC = () => {
       <Dialog.Root open={showLightbox} onOpenChange={setShowLightbox}>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-md animate-fadeIn" />
-          <Dialog.Content 
+          <Dialog.Content
             aria-describedby="dialog-lightbox-desc"
             className="fixed inset-0 z-[60] flex flex-col items-center justify-center p-4 sm:p-8 focus:outline-none"
           >

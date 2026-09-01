@@ -30,6 +30,11 @@ export const bookmarkedDealIdsAtom = atom<string[]>([]);
 // 目前正在查看詳情的情報物件 (供 Modal 使用)
 export const activeDealDetailAtom = atom<SmartDeal | null>(null);
 
+// 全域彈窗開關原子
+export const isSearchModalOpenAtom = atom<boolean>(false);
+export const isFilterModalOpenAtom = atom<boolean>(false);
+export const isAccountSheetOpenAtom = atom<boolean>(false);
+
 // 站內模擬推播 Toast 通知隊列
 export interface DealNotification {
   id: string;
@@ -41,3 +46,4 @@ export interface DealNotification {
 }
 
 export const dealNotificationsAtom = atom<DealNotification[]>([]);
+
