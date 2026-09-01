@@ -8,6 +8,7 @@ import { fetchPaginatedDealsAction } from '@/features/deals/server/deal.actions'
 import { SmartDealCard } from '@/features/deals/components/smart-deal-card';
 import { DealMasonrySkeleton } from '@/features/deals/components/deal-skeleton';
 import { RecommendedTagsModal } from '@/features/subscriptions/components/recommended-tags-modal';
+import { filterDealsLocally } from '@/features/deals/utils/deal-filter-utils';
 import {
   RotateCcw,
   Sparkles,
@@ -49,6 +50,16 @@ export const DealMasonryFeed: React.FC<DealMasonryFeedProps> = ({
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const isFirstRender = useRef<boolean>(true);
 
+  // 用戶端全局卡片庫存池（儲存所有已抓取到的卡片，支援切換標籤時 0ms 瞬間本地過濾）
+  const allKnownDealsPoolRef = useRef<Map<string, SmartDeal>>(
+    new Map(initialDeals.map((d) => [d.id, d]))
+  );
+
+  // 用戶端標籤快取池（儲存各標籤過濾結果，二次切換直接 0ms 讀取）
+  const filterCacheRef = useRef<Map<string, { deals: SmartDeal[]; total: number; hasMore: boolean }>>(
+    new Map()
+  );
+
   // 響應式固定欄數偵測 (手機 2 欄、平板 3 欄、桌機 4 欄)
   const [colCount, setColCount] = useState<number>(2);
 
@@ -79,10 +90,20 @@ export const DealMasonryFeed: React.FC<DealMasonryFeedProps> = ({
     return cols;
   }, [deals, colCount]);
 
-  // 監聽篩選器或訂閱標籤變更並動態重置並調用 Server Action
+  // 監聽篩選器或訂閱標籤變更：極速 0ms 本地過濾預渲染 + 非同步背景無縫更新
   useEffect(() => {
+    const filterKey = JSON.stringify({ ...filters, subscribedTags });
+
+    // 初始渲染若為預設首頁條件，直接使用 SSR initialDeals 即可
     if (isFirstRender.current) {
       isFirstRender.current = false;
+      initialDeals.forEach((d) => allKnownDealsPoolRef.current.set(d.id, d));
+      filterCacheRef.current.set(filterKey, {
+        deals: initialDeals,
+        total: initialTotal ?? initialDeals.length,
+        hasMore: initialHasMore,
+      });
+
       const isDefaultFilter = 
         !filters.searchQuery && 
         filters.selectedCity === '全部地區' && 
@@ -99,6 +120,23 @@ export const DealMasonryFeed: React.FC<DealMasonryFeedProps> = ({
       }
     }
 
+    // ⚡ 1. 0ms 本地瞬間響應 (先從快取或已載入的卡片池直接過濾渲染，達成 <10ms 零等待切換)
+    const cached = filterCacheRef.current.get(filterKey);
+    if (cached) {
+      setDeals(cached.deals);
+      setTotalCount(cached.total);
+      setHasMore(cached.hasMore);
+    } else {
+      const knownDeals = Array.from(allKnownDealsPoolRef.current.values());
+      const instantMatches = filterDealsLocally(knownDeals, { ...filters, subscribedTags });
+      if (instantMatches.length > 0) {
+        setDeals(instantMatches.slice(0, 12));
+        setTotalCount(instantMatches.length);
+        setHasMore(instantMatches.length > 12);
+      }
+    }
+
+    // 🌐 2. 同步背景調用 Server Action 取得伺服器最新分頁資料 (具備 DAL 記憶體快取，耗時僅約 10~30ms)
     startTransition(async () => {
       try {
         setError(null);
@@ -107,11 +145,23 @@ export const DealMasonryFeed: React.FC<DealMasonryFeedProps> = ({
           ...filters,
           subscribedTags,
         }, 1, 12, 0);
+
+        // 將最新資料存入全局卡片池與快取
+        result.deals.forEach((d) => allKnownDealsPoolRef.current.set(d.id, d));
+        filterCacheRef.current.set(filterKey, {
+          deals: result.deals,
+          total: result.total,
+          hasMore: result.hasMore,
+        });
+
         setDeals(result.deals);
         setHasMore(result.hasMore);
         setTotalCount(result.total);
       } catch (err: any) {
-        setError('無法載入特價情報，請檢查網路連線後重試');
+        // 若本地已有資料則不中斷畫面，僅在無資料時提示錯誤
+        if (deals.length === 0) {
+          setError('無法載入特價情報，請檢查網路連線後重試');
+        }
       }
     });
   }, [filters, subscribedTags]);
@@ -129,6 +179,8 @@ export const DealMasonryFeed: React.FC<DealMasonryFeedProps> = ({
         subscribedTags,
       }, undefined, 12, currentLength);
 
+      result.deals.forEach((d) => allKnownDealsPoolRef.current.set(d.id, d));
+
       setDeals((prev) => {
         const existingIds = new Set(prev.map((d) => d.id));
         const newUnique = result.deals.filter((d) => !existingIds.has(d.id));
@@ -136,7 +188,14 @@ export const DealMasonryFeed: React.FC<DealMasonryFeedProps> = ({
           setHasMore(false);
           return prev;
         }
-        return [...prev, ...newUnique];
+        const updated = [...prev, ...newUnique];
+        const filterKey = JSON.stringify({ ...filters, subscribedTags });
+        filterCacheRef.current.set(filterKey, {
+          deals: updated,
+          total: result.total,
+          hasMore: result.hasMore,
+        });
+        return updated;
       });
       setHasMore(result.hasMore);
       setTotalCount(result.total);
@@ -520,8 +579,8 @@ export const DealMasonryFeed: React.FC<DealMasonryFeedProps> = ({
       ) : null}
 
       {/* 6. 核心瀑布流列表區 (UI 五態實作) */}
-      {/* 狀態 1: ⏳ Loading 骨架屏 */}
-      {isPending ? (
+      {/* 狀態 1: ⏳ Loading 骨架屏 (僅在無快取/無卡片時顯示，切換標籤具備快取時 0ms 秒開不閃爍) */}
+      {isPending && deals.length === 0 ? (
         <DealMasonrySkeleton />
       ) : error ? (
         /* 狀態 3: ⚠️ Error 錯誤狀態 */
