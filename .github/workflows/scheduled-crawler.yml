@@ -23,7 +23,7 @@ jobs:
   crawl-and-sync:
     name: 執行四大黃金時段爬蟲與 Gemini 入庫
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
 
     steps:
       - name: 檢出專案代碼 (Checkout)
@@ -33,15 +33,36 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
 
-      - name: 安裝專案依賴套件 (Install Dependencies)
+      # ⚡ 方案一：快取 node_modules，避免每次重複 npm ci 下載數百套件
+      - name: 檢查並還原 Node 模組快取 (Cache node_modules)
+        id: node-cache
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+
+      - name: 安裝專案依賴套件 (僅在快取未命中時執行)
+        if: steps.node-cache.outputs.cache-hit != 'true'
         run: npm ci
 
-      - name: 安裝 Playwright Chromium 瀏覽器
+      # ⚡ 方案一：快取 Playwright Chromium 瀏覽器核心 (約 180MB)
+      - name: 檢查並還原 Playwright 瀏覽器快取 (Cache Playwright Chromium)
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+
+      - name: 全新下載 Playwright 瀏覽器與系統依賴 (僅在快取未命中時執行)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium
 
-      - name: 生成 Prisma Client
+      - name: 快速驗證 Playwright 系統底層相依函式庫 (快取命中時秒級完成)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      - name: 生成 Prisma 查詢引擎 (Prisma Generate)
         run: npx prisma generate
 
       - name: 執行定時爬蟲 + Gemini AI 解析 + 資料庫入庫
