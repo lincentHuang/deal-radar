@@ -37,7 +37,7 @@ export const RECOMMENDED_TAG_GROUPS: TagCategoryGroup[] = [
     tags: [
       { name: '#全聯', description: '福利中心檔期 DM 與特價', dealCount: 47 },
       { name: '#好市多', description: 'Costco 黑鑽會員省錢精選', dealCount: 31 },
-      { name: '#家樂福', description: '量販即期與線上商城折價', dealCount: 22 },
+      { name: '#萬家福', description: '量販即期與線上商城折價', dealCount: 22 },
       { name: '#屈臣氏', description: '開架美妝加一元多一件', dealCount: 20 },
     ],
   },

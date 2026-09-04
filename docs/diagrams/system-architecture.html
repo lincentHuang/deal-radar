@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>專案系統架構圖 (中文版) - 全通路特價情報聚合平台</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;600;700&family=Noto+Serif+TC:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: #ececec;
+      color: #2d3142;
+      font-family: 'Geist', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 20px;
+      min-height: 100vh;
+    }
+    .diagram-container {
+      background: #f5f5f5;
+      border: 1px solid rgba(45, 49, 66, 0.12);
+      border-radius: 12px;
+      padding: 32px;
+      max-width: 1200px;
+      width: 100%;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+    }
+    .header {
+      margin-bottom: 24px;
+    }
+    h1 {
+      font-family: 'Instrument Serif', 'Noto Serif TC', serif;
+      font-size: 2rem;
+      font-weight: 700;
+      color: #2d3142;
+      letter-spacing: -0.02em;
+      margin-bottom: 6px;
+    }
+    .subtitle {
+      font-family: 'Geist Mono', 'Noto Sans TC', monospace;
+      font-size: 0.82rem;
+      color: #4f5d75;
+      letter-spacing: 0.06em;
+    }
+    svg {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="diagram-container">
+    <div class="header">
+      <h1>專案系統架構總覽圖 · 全通路特價情報聚合平台</h1>
+      <p class="subtitle">系統架構核心佈局 // NEXT.JS 15 + NEON POSTGRESQL + GEMINI 2.0 FLASH</p>
+    </div>
+
+    <svg viewBox="0 0 1100 680" width="100%" height="680" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <!-- 箭頭標記 -->
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/>
+        </marker>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/>
+        </marker>
+
+        <!-- 網點背景 -->
+        <pattern id="dots" width="20" height="20" patternUnits="userSpaceOnUse">
+          <circle cx="1" cy="1" r="0.8" fill="rgba(45,49,66,0.08)"/>
+        </pattern>
+      </defs>
+
+      <!-- 底層畫布 -->
+      <rect width="100%" height="100%" fill="#f5f5f5" rx="8"/>
+      <rect width="100%" height="100%" fill="url(#dots)" opacity="0.6"/>
+
+      <!-- ================= 區域邊界 (ZONES) ================= -->
+      <!-- 區域 1: 用戶終端表現層 -->
+      <rect x="30" y="70" width="220" height="570" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.12)" stroke-width="0.8"/>
+      <rect x="42" y="58" width="125" height="18" rx="3" fill="#f5f5f5"/>
+      <text x="104" y="71" fill="#7a8399" font-size="8.5" font-family="'Geist Mono', 'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle" letter-spacing="0.08em">用戶終端表現層</text>
+
+      <!-- 區域 2: Next.js 核心應用層 -->
+      <rect x="280" y="70" width="370" height="570" rx="8" fill="rgba(235,108,54,0.02)" stroke="rgba(235,108,54,0.25)" stroke-dasharray="4,4" stroke-width="0.8"/>
+      <rect x="292" y="58" width="170" height="18" rx="3" fill="#f5f5f5"/>
+      <text x="377" y="71" fill="#eb6c36" font-size="8.5" font-family="'Geist Mono', 'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle" letter-spacing="0.08em">NEXT.JS 15 全端核心層</text>
+
+      <!-- 區域 3: AI 視覺解析與資料採集管線 -->
+      <rect x="680" y="70" width="390" height="270" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.12)" stroke-width="0.8"/>
+      <rect x="692" y="58" width="195" height="18" rx="3" fill="#f5f5f5"/>
+      <text x="789" y="71" fill="#7a8399" font-size="8.5" font-family="'Geist Mono', 'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle" letter-spacing="0.08em">AI 視覺解析與爬蟲管線層</text>
+
+      <!-- 區域 4: 雲端資料與持久化層 -->
+      <rect x="680" y="370" width="390" height="270" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.12)" stroke-width="0.8"/>
+      <rect x="692" y="358" width="165" height="18" rx="3" fill="#f5f5f5"/>
+      <text x="774" y="371" fill="#7a8399" font-size="8.5" font-family="'Geist Mono', 'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle" letter-spacing="0.08em">雲端資料庫與持久化層</text>
+
+      <!-- ================= 連接線路 (正交圓角) ================= -->
+      <!-- 終端至 Next.js 頁面呈現 -->
+      <path d="M 220,135 H 305" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <path d="M 220,305 H 305" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <path d="M 220,475 H 305" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+      <!-- Next.js 內部: Server Actions 至 DAL -->
+      <path d="M 465,330 V 380" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+      <!-- Next.js 調度至 AI 視覺管線 -->
+      <path d="M 625,135 H 710" fill="none" stroke="#eb6c36" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+
+      <!-- AI 拆解至去重引擎 -->
+      <path d="M 875,135 H 915" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+      <!-- 去重完成寫入 DAL / 資料庫 -->
+      <path d="M 985,170 V 430 H 625" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+      <!-- DAL 連線至 Prisma -->
+      <path d="M 625,430 H 710" fill="none" stroke="#4f5d75" stroke-width="1.4" marker-end="url(#arrow)"/>
+
+      <!-- Prisma 存取 Neon 資料庫 -->
+      <path d="M 865,430 H 910" fill="none" stroke="#4f5d75" stroke-width="1.4" marker-end="url(#arrow)"/>
+
+      <!-- 定時排程觸發 Next.js API -->
+      <path d="M 882,250 V 295 H 625" fill="none" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+
+      <!-- ================= 核心節點 (NODES) ================= -->
+      
+      <!-- [用戶終端表現層節點] -->
+      <!-- 節點: 消費者前台情報牆 -->
+      <rect x="50" y="100" width="170" height="70" rx="6" fill="#f5f5f5" stroke="#2d3142" stroke-width="1.2"/>
+      <text x="135" y="125" fill="#2d3142" font-size="12" font-family="'Geist', 'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle">消費者特價情報牆</text>
+      <text x="135" y="145" fill="#7a8399" font-size="9" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">純 CSS 瀑布流 / 4px 卡片</text>
+      <text x="135" y="158" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">Jotai 原子化狀態同步</text>
+
+      <!-- 節點: 官方小編工作台 -->
+      <rect x="50" y="270" width="170" height="70" rx="6" fill="#f5f5f5" stroke="#2d3142" stroke-width="1.2"/>
+      <text x="135" y="295" fill="#2d3142" font-size="12" font-family="'Geist', 'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle">品牌小編工作台</text>
+      <text x="135" y="315" fill="#7a8399" font-size="9" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">/merchant 品牌隔離空間</text>
+      <text x="135" y="328" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">DM 智能製卡 · CPM/CPC 投放</text>
+
+      <!-- 節點: 最高管理中控台 -->
+      <rect x="50" y="440" width="170" height="70" rx="6" fill="#f5f5f5" stroke="#2d3142" stroke-width="1.2"/>
+      <text x="135" y="465" fill="#2d3142" font-size="12" font-family="'Geist', 'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle">最高管理中控台</text>
+      <text x="135" y="485" fill="#7a8399" font-size="9" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">/admin (安全 PIN 守門員)</text>
+      <text x="135" y="498" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">爬蟲排程調度 · 1-Char 去重審核</text>
+
+      <!-- [Next.js 核心應用層節點] -->
+      <!-- 節點: 頁面路由與伺服器組件 -->
+      <rect x="305" y="100" width="320" height="70" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1.2"/>
+      <text x="465" y="125" fill="#2d3142" font-size="12" font-family="'Geist', 'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle">Next.js App Router (伺服器端渲染)</text>
+      <text x="465" y="145" fill="#7a8399" font-size="9" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">React 19 Server Components · 首幀零版面位移</text>
+      <text x="465" y="158" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">Radix UI 無障礙基底 · Tailwind 響應式佈局</text>
+
+      <!-- 節點: Server Actions 與 API Handlers -->
+      <rect x="305" y="260" width="320" height="70" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1.2"/>
+      <text x="465" y="285" fill="#2d3142" font-size="12" font-family="'Geist', 'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle">伺服器動作 (Server Actions) 與 API 路由</text>
+      <text x="465" y="305" fill="#7a8399" font-size="9" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">Zod 雙端強型別契約校驗 · 會員 Session / JWT 鑑權</text>
+      <text x="465" y="318" fill="#4f5d75" font-size="8.5" font-family="'Geist Mono', 'Noto Sans TC', monospace" text-anchor="middle">/api/cron/crawl (爬蟲調度) · /api/auth/sync (雲端同步)</text>
+
+      <!-- 節點: 資料存取層 DAL -->
+      <rect x="305" y="380" width="320" height="100" rx="6" fill="rgba(45,49,66,0.04)" stroke="#2d3142" stroke-width="1.2"/>
+      <text x="465" y="405" fill="#2d3142" font-size="12" font-family="'Geist', 'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle">資料存取層 (Data Access Layer · DAL)</text>
+      <text x="465" y="425" fill="#eb6c36" font-size="9" font-family="'Geist Mono', monospace" font-weight="600" text-anchor="middle">import 'server-only'</text>
+      <text x="465" y="445" fill="#4f5d75" font-size="9" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">deals-dal.ts · auth-dal.ts · ads-dal.ts</text>
+      <text x="465" y="462" fill="#7a8399" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">多租戶資料隔離 · 防敏感金鑰外洩之安全防護邊界</text>
+
+      <!-- [AI 視覺與爬蟲管線節點] -->
+      <!-- 節點: Gemini 2.0 Flash (核心焦點) -->
+      <rect x="710" y="100" width="165" height="70" rx="6" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1.6"/>
+      <text x="792" y="125" fill="#2d3142" font-size="12" font-family="'Geist', 'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle">Gemini 2.0 Flash AI</text>
+      <text x="792" y="145" fill="#eb6c36" font-size="9" font-family="'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle">多模態視覺智能解析</text>
+      <text x="792" y="158" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">1-to-N 海報全品項自動拆解</text>
+
+      <!-- 節點: 1-Char 去重引擎 -->
+      <rect x="915" y="100" width="140" height="70" rx="6" fill="#f5f5f5" stroke="#2d3142" stroke-width="1.2"/>
+      <text x="985" y="125" fill="#2d3142" font-size="11.5" font-family="'Geist', 'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle">1-Char 容錯去重引擎</text>
+      <text x="985" y="145" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">編輯距離 ≤ 1</text>
+      <text x="985" y="158" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">來源權重：粉專 > 官網 > 媒體</text>
+
+      <!-- 節點: 爬蟲引擎與定時排程 -->
+      <rect x="710" y="195" width="345" height="55" rx="6" fill="#f5f5f5" stroke="#4f5d75" stroke-width="1"/>
+      <text x="882" y="218" fill="#2d3142" font-size="11" font-family="'Geist', 'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle">Playwright 爬蟲引擎與排程中控</text>
+      <text x="882" y="236" fill="#7a8399" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">Playwright + Cheerio · 4 大黃金窗口 · 01:00~07:30 深夜靜默省電</text>
+
+      <!-- [雲端資料庫與持久化節點] -->
+      <!-- 節點: Prisma ORM -->
+      <rect x="710" y="395" width="155" height="70" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1.2"/>
+      <text x="787" y="420" fill="#2d3142" font-size="12" font-family="'Geist', 'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle">Prisma ORM 6.4</text>
+      <text x="787" y="440" fill="#7a8399" font-size="9" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">型別安全 Schema 映射</text>
+      <text x="787" y="453" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">契約先行資料庫遷移</text>
+
+      <!-- 節點: Neon PostgreSQL (核心焦點) -->
+      <rect x="910" y="395" width="145" height="70" rx="6" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1.6"/>
+      <text x="982" y="420" fill="#2d3142" font-size="12" font-family="'Geist', 'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle">Neon PostgreSQL</text>
+      <text x="982" y="440" fill="#eb6c36" font-size="9" font-family="'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle">Serverless 雲端資料庫</text>
+      <text x="982" y="453" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">自動擴展 · 閒置自動休眠</text>
+
+      <!-- 節點: 資料實體持久化 -->
+      <rect x="710" y="490" width="345" height="65" rx="6" fill="rgba(45,49,66,0.04)" stroke="#4f5d75" stroke-width="1"/>
+      <text x="882" y="515" fill="#2d3142" font-size="11" font-family="'Geist', 'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle">實體資料模型與持久化儲存</text>
+      <text x="882" y="533" fill="#7a8399" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">特價情報 (Deals) · 會員 (Users) · 標籤追蹤 · 廣告投放 · 去重忽略配對</text>
+
+      <!-- 頁尾註腳 -->
+      <text x="30" y="665" fill="#7a8399" font-size="8.5" font-family="'Instrument Serif', 'Noto Serif TC', serif" font-style="italic">全通路特價情報聚合平台 系統架構圖 (中文版) · Diagram Design Editorial Standard v2.6</text>
+    </svg>
+  </div>
+</body>
+</html>

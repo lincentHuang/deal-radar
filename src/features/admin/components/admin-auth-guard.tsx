@@ -57,11 +57,15 @@ export const AdminAuthGuard: React.FC<AdminAuthGuardProps> = ({ children }) => {
   const handleQuickDemoUnlock = async () => {
     setPin('8888');
     setIsLoading(true);
+    setErrorMessage('');
     const res = await verifyAdminPinAction('8888');
     if (res.success) {
       triggerHaptic('success');
       sessionStorage.setItem(STORAGE_KEY, 'super_admin_verified');
       setIsAuthenticated(true);
+    } else {
+      triggerHaptic('warning');
+      setErrorMessage(res.message || '快速展示模式已被管理員關閉，請輸入真實安全 PIN 碼');
     }
     setIsLoading(false);
   };

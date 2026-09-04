@@ -4,6 +4,8 @@ import { INITIAL_SMART_DEALS } from '@/features/deals/server/deals-mock-data';
 import { MerchantCreateDealInput } from '@/features/deals/schemas/deal.schema';
 import { prisma } from '@/shared/lib/prisma';
 import { filterDealsLocally } from '@/features/deals/utils/deal-filter-utils';
+import { isDealExpired, parseDealEndTimestamp } from '@/features/deals/utils/date-utils';
+import { normalizeBrandName, normalizeTags } from '@/features/deals/utils/brand-normalizer';
 
 export { filterDealsLocally };
 
@@ -211,12 +213,18 @@ export async function getDealById(id: string): Promise<SmartDeal | null> {
  * 商家發布新特價活動 (寫入遠端資料庫)
  */
 export async function createDeal(input: MerchantCreateDealInput): Promise<SmartDeal> {
+  const normMerchant = normalizeBrandName(input.merchantName);
+  const rawTagList = input.tags 
+    ? input.tags.split(/[,，、\s]/).map((t) => t.trim()).filter(Boolean)
+    : [`#${normMerchant}`, `#特價`];
+  const finalTags = normalizeTags(rawTagList, normMerchant);
+
   const newDealData = {
     id: `deal-merchant-${Date.now()}`,
     title: input.title,
     category: input.category,
     channelType: input.channelType,
-    merchantName: input.merchantName,
+    merchantName: normMerchant,
     merchantLogo: null,
     storeBranches: input.district ? `${input.city} ${input.district} 門市` : `${input.city} 指定門市`,
     regions: [input.city, input.district ? `${input.city} / ${input.district}` : input.city],
@@ -226,9 +234,7 @@ export async function createDeal(input: MerchantCreateDealInput): Promise<SmartD
     targetItems: input.targetItems.split(/[,，、]/).map((s) => s.trim()).filter(Boolean),
     conditions: input.conditions.split(/[,，、\n]/).map((s) => s.trim()).filter(Boolean),
     eligibleCards: input.eligibleCards ? input.eligibleCards.split(/[,，、]/).map((s) => s.trim()).filter(Boolean) : [],
-    tags: input.tags 
-      ? input.tags.split(/[,，、\s]/).map((t) => t.startsWith('#') ? t : `#${t}`).filter((t) => t !== '#')
-      : [`#${input.merchantName}`, `#特價`],
+    tags: finalTags,
     startDate: new Date(input.startDate).toISOString().split('T')[0],
     endDate: new Date(input.endDate).toISOString().split('T')[0],
     isHot: true,
@@ -294,38 +300,77 @@ export async function redeemVoucher(voucherCode: string, dealId: string): Promis
   };
 }
 
-/**
- * 自動清理遠端資料庫中已過期的特惠活動 (endDate < 今日)
- */
-export async function purgeExpiredDeals(): Promise<number> {
-  try {
-    const today = new Date().toISOString().split('T')[0];
-    const expiredRecords = await prisma.deal.findMany({
-      where: {
-        endDate: {
-          lt: today,
-          not: '',
-        },
-      },
-    });
-
-    if (expiredRecords.length > 0) {
-      const expiredIds = expiredRecords.map((r) => r.id);
-      const deleteRes = await prisma.deal.deleteMany({
-        where: { id: { in: expiredIds } },
-      });
-      console.log(`[Deals-DAL] 🧹 Purged ${deleteRes.count} expired deals from remote database.`);
-      return deleteRes.count;
-    }
-    return 0;
-  } catch (err) {
-    console.error('[Deals-DAL] ⚠️ purgeExpiredDeals error:', err);
-    return 0;
-  }
+export interface PurgeExpiredDealsResult {
+  purgedCount: number;
+  purgedBookmarkCount: number;
+  purgedDeals: { id: string; title: string; endDate: string }[];
 }
 
 /**
- * 批次寫入或更新爬蟲爬取的特價情報 (遠端資料庫 upsert 去重)
+ * 自動清理遠端資料庫中已過期的特惠活動 (支援純日期、精確時分秒時間與 ISO 時區)
+ */
+export async function purgeExpiredDeals(): Promise<PurgeExpiredDealsResult> {
+  try {
+    if (!process.env.DATABASE_URL) {
+      return { purgedCount: 0, purgedBookmarkCount: 0, purgedDeals: [] };
+    }
+
+    const now = Date.now();
+    const records = await prisma.deal.findMany({
+      select: {
+        id: true,
+        title: true,
+        endDate: true,
+      },
+    });
+
+    const expiredRecords = records.filter((r) => isDealExpired(r.endDate, now));
+
+    if (expiredRecords.length > 0) {
+      const expiredIds = expiredRecords.map((r) => r.id);
+
+      // 1. 同步清理孤立的收藏 (Bookmarks)
+      const bookmarkDeleteRes = await prisma.bookmark.deleteMany({
+        where: { dealId: { in: expiredIds } },
+      });
+
+      // 2. 實體刪除已過期特惠活動
+      const deleteRes = await prisma.deal.deleteMany({
+        where: { id: { in: expiredIds } },
+      });
+
+      invalidateDealsCache();
+      console.log(`[Deals-DAL] 🧹 Purged ${deleteRes.count} expired deals and ${bookmarkDeleteRes.count} orphan bookmarks from remote database.`);
+
+      return {
+        purgedCount: deleteRes.count,
+        purgedBookmarkCount: bookmarkDeleteRes.count,
+        purgedDeals: expiredRecords.map((r) => ({
+          id: r.id,
+          title: r.title,
+          endDate: r.endDate,
+        })),
+      };
+    }
+
+    return { purgedCount: 0, purgedBookmarkCount: 0, purgedDeals: [] };
+  } catch (err) {
+    console.error('[Deals-DAL] ⚠️ purgeExpiredDeals error:', err);
+    return { purgedCount: 0, purgedBookmarkCount: 0, purgedDeals: [] };
+  }
+}
+
+// 來源優先級定義：官方粉專 > 官方網站 > 部落格專題整理
+const SOURCE_PRIORITY_WEIGHTS: Record<string, number> = {
+  social_listening: 3, // 官方 Facebook 粉絲團（第一手即時公告）
+  merchant_post: 3,    // 店家認證直發
+  official: 2,         // 品牌官方網站活動頁
+  blog_curation: 1,    // 部落格 / 媒體報導整理
+  affiliate: 1,        // 導購聯盟
+};
+
+/**
+ * 批次寫入或更新爬蟲爬取的特價情報 (遠端資料庫 upsert 去重，嚴格執行粉專第一手優先原則)
  */
 export async function upsertCrawledDeals(crawledDeals: SmartDeal[]): Promise<{
   insertedCount: number;
@@ -335,7 +380,8 @@ export async function upsertCrawledDeals(crawledDeals: SmartDeal[]): Promise<{
   createdDeals: SmartDeal[];
   updatedDeals: SmartDeal[];
 }> {
-  const purgedCount = await purgeExpiredDeals();
+  const purgeResult = await purgeExpiredDeals();
+  const purgedCount = purgeResult.purgedCount;
 
   let insertedCount = 0;
   let updatedCount = 0;
@@ -344,12 +390,8 @@ export async function upsertCrawledDeals(crawledDeals: SmartDeal[]): Promise<{
   const now = Date.now();
 
   for (const deal of crawledDeals) {
-    if (deal.endDate) {
-      const fullEndStr = deal.endDate.includes('T') ? deal.endDate : `${deal.endDate}T23:59:59`;
-      const endTime = new Date(fullEndStr).getTime();
-      if (!isNaN(endTime) && endTime < now) {
-        continue;
-      }
+    if (deal.endDate && isDealExpired(deal.endDate, now)) {
+      continue;
     }
 
     let existing = null;
@@ -367,12 +409,37 @@ export async function upsertCrawledDeals(crawledDeals: SmartDeal[]): Promise<{
       });
     }
 
+    // 模糊匹配品項與店家相同之現存情報
+    if (!existing && deal.targetItems && deal.targetItems.length > 0) {
+      const candidates = await prisma.deal.findMany({
+        where: {
+          merchantName: {
+            contains: deal.merchant.name.slice(0, 3),
+            mode: 'insensitive',
+          },
+        },
+      });
+
+      for (const cand of candidates) {
+        const hasSharedItem = cand.targetItems.some((item) =>
+          deal.targetItems.some((dItem) => item.includes(dItem) || dItem.includes(item))
+        );
+        if (hasSharedItem) {
+          existing = cand;
+          break;
+        }
+      }
+    }
+
+    const normalizedMerchantName = normalizeBrandName(deal.merchant?.name);
+    const normalizedTags = normalizeTags(deal.tags, normalizedMerchantName);
+
     const dealData = {
       title: deal.title,
       subtitle: deal.subtitle || null,
       category: deal.category,
       channelType: deal.channelType,
-      merchantName: deal.merchant.name,
+      merchantName: normalizedMerchantName,
       merchantLogo: deal.merchant.logo || null,
       storeBranches: deal.merchant.storeBranches || null,
       regions: deal.regions || [],
@@ -382,7 +449,7 @@ export async function upsertCrawledDeals(crawledDeals: SmartDeal[]): Promise<{
       targetItems: deal.targetItems || [],
       conditions: deal.conditions || [],
       eligibleCards: deal.eligibleCards || [],
-      tags: deal.tags || [],
+      tags: normalizedTags,
       startDate: deal.startDate,
       endDate: deal.endDate,
       isHot: Boolean(deal.isHot),
@@ -400,6 +467,25 @@ export async function upsertCrawledDeals(crawledDeals: SmartDeal[]): Promise<{
     };
 
     if (existing) {
+      const existingWeight = SOURCE_PRIORITY_WEIGHTS[existing.source] || 1;
+      const incomingWeight = SOURCE_PRIORITY_WEIGHTS[deal.source || 'official'] || 1;
+
+      // 🔥【粉專衝突優先原則】：若現存為官方粉專 (weight: 3)，且傳入為部落格 (weight: 1)，以粉專為主，不被部落格資料覆蓋！
+      if (existingWeight > incomingWeight) {
+        console.log(`[Deals-DAL] 🛡️ 衝突優先防護：店家【${deal.merchant.name}】已存在粉專第一手情報 (${existing.source})，跳過部落格 (${deal.source}) 覆蓋。`);
+        // 僅補充媒體推薦標籤，保留粉專核心內容
+        const combinedTags = normalizeTags([...existing.tags, ...(deal.tags || [])], normalizedMerchantName);
+        const updated = await prisma.deal.update({
+          where: { id: existing.id },
+          data: { 
+            merchantName: normalizedMerchantName,
+            tags: combinedTags 
+          },
+        });
+        updatedDeals.push(mapDbDealToSmartDeal(updated));
+        continue;
+      }
+
       const updated = await prisma.deal.update({
         where: { id: existing.id },
         data: dealData,
@@ -442,7 +528,7 @@ export async function updateDeal(id: string, updates: Partial<SmartDeal>): Promi
   if (updates.subtitle !== undefined) data.subtitle = updates.subtitle;
   if (updates.category !== undefined) data.category = updates.category;
   if (updates.channelType !== undefined) data.channelType = updates.channelType;
-  if (updates.merchant?.name !== undefined) data.merchantName = updates.merchant.name;
+  if (updates.merchant?.name !== undefined) data.merchantName = normalizeBrandName(updates.merchant.name);
   if (updates.merchant?.logo !== undefined) data.merchantLogo = updates.merchant.logo;
   if (updates.merchant?.storeBranches !== undefined) data.storeBranches = updates.merchant.storeBranches;
   if (updates.regions !== undefined) data.regions = updates.regions;
@@ -452,7 +538,7 @@ export async function updateDeal(id: string, updates: Partial<SmartDeal>): Promi
   if (updates.targetItems !== undefined) data.targetItems = updates.targetItems;
   if (updates.conditions !== undefined) data.conditions = updates.conditions;
   if (updates.eligibleCards !== undefined) data.eligibleCards = updates.eligibleCards;
-  if (updates.tags !== undefined) data.tags = updates.tags;
+  if (updates.tags !== undefined) data.tags = normalizeTags(updates.tags, updates.merchant?.name);
   if (updates.startDate !== undefined) data.startDate = updates.startDate;
   if (updates.endDate !== undefined) data.endDate = updates.endDate;
   if (updates.isHot !== undefined) data.isHot = updates.isHot;
@@ -545,38 +631,43 @@ export async function getDealsByMerchant(merchantName: string): Promise<SmartDea
  * 批次新增特惠卡片 (DM 快速製卡批量寫入遠端資料庫)
  */
 export async function batchCreateSmartDeals(deals: SmartDeal[]): Promise<SmartDeal[]> {
-  const data = deals.map((deal) => ({
-    id: deal.id || `deal-batch-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-    title: deal.title,
-    subtitle: deal.subtitle || null,
-    category: deal.category,
-    channelType: deal.channelType,
-    merchantName: deal.merchant.name,
-    merchantLogo: deal.merchant.logo || null,
-    storeBranches: deal.merchant.storeBranches || null,
-    regions: deal.regions || [],
-    originalPrice: deal.originalPrice || null,
-    discountPrice: deal.discountPrice || null,
-    priceUnit: deal.priceUnit || '元',
-    targetItems: deal.targetItems || [],
-    conditions: deal.conditions || [],
-    eligibleCards: deal.eligibleCards || [],
-    tags: deal.tags || [],
-    startDate: deal.startDate,
-    endDate: deal.endDate,
-    isHot: Boolean(deal.isHot),
-    isFlashDeal: Boolean(deal.isFlashDeal),
-    source: deal.source || 'official',
-    sourcePlatform: deal.sourcePlatform || null,
-    sourceUrl: deal.sourceUrl || null,
-    likeCount: deal.likeCount || 0,
-    commentCount: deal.commentCount || 0,
-    priceHistory: deal.priceHistory ? (deal.priceHistory as any) : undefined,
-    priceDropAlert: deal.priceDropAlert ? (deal.priceDropAlert as any) : undefined,
-    imageUrl: deal.imageUrl || null,
-    images: deal.images || (deal.imageUrl ? [deal.imageUrl] : []),
-    aspectRatio: deal.aspectRatio || null,
-  }));
+  const data = deals.map((deal) => {
+    const normMerchant = normalizeBrandName(deal.merchant?.name);
+    const normTags = normalizeTags(deal.tags, normMerchant);
+
+    return {
+      id: deal.id || `deal-batch-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      title: deal.title,
+      subtitle: deal.subtitle || null,
+      category: deal.category,
+      channelType: deal.channelType,
+      merchantName: normMerchant,
+      merchantLogo: deal.merchant.logo || null,
+      storeBranches: deal.merchant.storeBranches || null,
+      regions: deal.regions || [],
+      originalPrice: deal.originalPrice || null,
+      discountPrice: deal.discountPrice || null,
+      priceUnit: deal.priceUnit || '元',
+      targetItems: deal.targetItems || [],
+      conditions: deal.conditions || [],
+      eligibleCards: deal.eligibleCards || [],
+      tags: normTags,
+      startDate: deal.startDate,
+      endDate: deal.endDate,
+      isHot: Boolean(deal.isHot),
+      isFlashDeal: Boolean(deal.isFlashDeal),
+      source: deal.source || 'official',
+      sourcePlatform: deal.sourcePlatform || null,
+      sourceUrl: deal.sourceUrl || null,
+      likeCount: deal.likeCount || 0,
+      commentCount: deal.commentCount || 0,
+      priceHistory: deal.priceHistory ? (deal.priceHistory as any) : undefined,
+      priceDropAlert: deal.priceDropAlert ? (deal.priceDropAlert as any) : undefined,
+      imageUrl: deal.imageUrl || null,
+      images: deal.images || (deal.imageUrl ? [deal.imageUrl] : []),
+      aspectRatio: deal.aspectRatio || null,
+    };
+  });
 
   await prisma.deal.createMany({
     data,
@@ -633,21 +724,17 @@ export async function batchUpdateDeals(
     if (options.tagsToAdd && options.tagsToAdd.length > 0) {
       const currentTags = [...(updatedDeal.tags || [])];
       for (const t of options.tagsToAdd) {
-        const cleanT = t.trim().startsWith('#') ? t.trim() : `#${t.trim()}`;
-        if (cleanT.length > 1 && !currentTags.some((existing) => existing.toLowerCase() === cleanT.toLowerCase())) {
-          if (currentTags.length < 8) {
-            currentTags.push(cleanT);
-          }
-        }
+        currentTags.push(t);
       }
-      updatedDeal.tags = currentTags;
+      updatedDeal.tags = normalizeTags(currentTags, updatedDeal.merchant.name);
     }
 
     if (options.tagsToRemove && options.tagsToRemove.length > 0) {
       const removeSet = new Set(options.tagsToRemove.map((t) => t.toLowerCase().trim()));
-      updatedDeal.tags = (updatedDeal.tags || []).filter(
+      const filtered = (updatedDeal.tags || []).filter(
         (t) => !removeSet.has(t.toLowerCase().trim()) && !removeSet.has(t.replace(/^#/, '').toLowerCase().trim())
       );
+      updatedDeal.tags = normalizeTags(filtered, updatedDeal.merchant.name);
     }
 
     // 4. 價格調整

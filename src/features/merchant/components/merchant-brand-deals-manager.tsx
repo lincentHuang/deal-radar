@@ -381,14 +381,24 @@ export const MerchantBrandDealsManager: React.FC<MerchantBrandDealsManagerProps>
             )}
 
             {selectedIds.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setIsBatchEditModalOpen(true)}
-                className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-2xl shadow-sm transition-all flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer"
-              >
-                <SlidersHorizontal className="w-4 h-4" />
-                <span>批量編輯 ({selectedIds.length})</span>
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => setIsBatchEditModalOpen(true)}
+                  className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-2xl shadow-sm transition-all flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer"
+                >
+                  <SlidersHorizontal className="w-4 h-4" />
+                  <span>批量編輯 ({selectedIds.length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBatchDelete}
+                  className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-2xl shadow-sm transition-all flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>批量下架 ({selectedIds.length})</span>
+                </button>
+              </>
             )}
 
             <button

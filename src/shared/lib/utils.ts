@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { parseDealEndTimestamp, parseDealStartTimestamp } from '@/features/deals/utils/date-utils';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -40,15 +41,12 @@ export function formatRemainingTime(
   isExpired: boolean;
   isUpcoming: boolean;
 } {
-  const now = new Date();
-  const nowTime = now.getTime();
+  const nowTime = Date.now();
 
   // 若提供開始日期且尚未開跑
   if (startDateString) {
-    const start = new Date(
-      startDateString.includes('T') ? startDateString : `${startDateString}T00:00:00`
-    ).getTime();
-    if (start > nowTime) {
+    const start = parseDealStartTimestamp(startDateString);
+    if (start !== null && start > nowTime) {
       const sDate = new Date(start);
       const startMonth = sDate.getMonth() + 1;
       const startDay = sDate.getDate();
@@ -61,10 +59,11 @@ export function formatRemainingTime(
     }
   }
 
-  // 結束時間設定為該日 23:59:59 以涵蓋整天營業時間
-  const end = new Date(
-    endDateString.includes('T') ? endDateString : `${endDateString}T23:59:59`
-  ).getTime();
+  const end = parseDealEndTimestamp(endDateString);
+
+  if (end === null) {
+    return { text: '長期優惠', isUrgent: false, isExpired: false, isUpcoming: false };
+  }
 
   const diff = end - nowTime;
 

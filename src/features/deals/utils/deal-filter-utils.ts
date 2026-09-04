@@ -1,4 +1,5 @@
 import { SmartDeal, DealFilterState } from '@/features/deals/types/deal.types';
+import { parseDealEndTimestamp, parseDealStartTimestamp, isDealExpired } from './date-utils';
 
 export function filterDealsLocally(deals: SmartDeal[], filters?: Partial<DealFilterState>): SmartDeal[] {
   let results = [...deals];
@@ -150,33 +151,19 @@ export function filterDealsLocally(deals: SmartDeal[], filters?: Partial<DealFil
       case 'expiring': {
         const now = Date.now();
 
-        const parseEndTime = (dateStr?: string): number | null => {
-          if (!dateStr) return null;
-          const fullStr = dateStr.includes('T') ? dateStr : `${dateStr}T23:59:59`;
-          const t = new Date(fullStr).getTime();
-          return isNaN(t) ? null : t;
-        };
-
-        const parseStartTime = (dateStr?: string): number | null => {
-          if (!dateStr) return null;
-          const fullStr = dateStr.includes('T') ? dateStr : `${dateStr}T00:00:00`;
-          const t = new Date(fullStr).getTime();
-          return isNaN(t) ? null : t;
-        };
-
         results = results.filter((deal) => {
-          const end = parseEndTime(deal.endDate);
+          const end = parseDealEndTimestamp(deal.endDate);
           if (end === null || end < now) return false;
 
-          const start = parseStartTime(deal.startDate);
+          const start = parseDealStartTimestamp(deal.startDate);
           if (start !== null && start > now) return false;
 
           return true;
         });
 
         results.sort((a, b) => {
-          const endA = parseEndTime(a.endDate) ?? Infinity;
-          const endB = parseEndTime(b.endDate) ?? Infinity;
+          const endA = parseDealEndTimestamp(a.endDate) ?? Infinity;
+          const endB = parseDealEndTimestamp(b.endDate) ?? Infinity;
           if (endA !== endB) {
             return endA - endB;
           }

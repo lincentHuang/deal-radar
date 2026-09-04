@@ -29,6 +29,7 @@ interface AdminDashboardProps {
   initialLogs: CrawlerJobLog[];
   initialStats: AdminStats;
   initialCampaigns: AdCampaign[];
+  initialBrandGroupIcons?: Record<string, string>;
 }
 
 type AdminTab = 'deals' | 'crawler' | 'ads';
@@ -40,6 +41,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   initialLogs,
   initialStats,
   initialCampaigns,
+  initialBrandGroupIcons,
 }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('deals');
   const { triggerHaptic } = useMobileNative();
@@ -171,6 +173,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           initialTargets={initialTargets}
           initialSchedule={initialSchedule}
           initialLogs={initialLogs}
+          initialBrandGroupIcons={initialBrandGroupIcons}
           onRefresh={() => router.refresh()}
           onViewDealsTab={() => handleTabChange('deals')}
         />

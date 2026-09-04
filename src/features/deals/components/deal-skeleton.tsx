@@ -37,8 +37,8 @@ export const DealSkeleton: React.FC = () => {
 
 export const DealMasonrySkeleton: React.FC = () => {
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-5 w-full items-start">
-      {Array.from({ length: 8 }).map((_, i) => (
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-2.5 w-full items-start">
+      {Array.from({ length: 12 }).map((_, i) => (
         <div key={i} className="w-full">
           <DealSkeleton />
         </div>

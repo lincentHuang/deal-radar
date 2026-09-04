@@ -15,7 +15,8 @@ import {
   Flame,
   Tag as TagIcon,
   Sparkles,
-  ShoppingBag
+  ShoppingBag,
+  Video
 } from 'lucide-react';
 import { useSetAtom, useAtom } from 'jotai';
 import { activeDealDetailAtom, subscribedTagsAtom } from '@/features/subscriptions/atoms/subscription-atoms';
@@ -33,7 +34,24 @@ export const SmartDealCard: React.FC<SmartDealCardProps> = ({ deal, onTagClick, 
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(deal.likeCount);
   const [imgError, setImgError] = useState(false);
+  const [isImgLoaded, setIsImgLoaded] = useState(false);
   const { triggerHaptic, shareContent, copyToClipboard } = useMobileNative();
+
+  const getAspectRatioClass = (ratio?: string) => {
+    switch (ratio) {
+      case '1:1':
+        return 'aspect-square';
+      case '3:4':
+        return 'aspect-[3/4]';
+      case '16:9':
+        return 'aspect-[16/9]';
+      case '9:16':
+        return 'aspect-[9/16]';
+      case '4:3':
+      default:
+        return 'aspect-[4/3]';
+    }
+  };
 
   const discountInfo = calculateDiscount(deal.originalPrice, deal.discountPrice);
   const timeInfo = formatRemainingTime(deal.endDate, deal.startDate);
@@ -90,20 +108,29 @@ export const SmartDealCard: React.FC<SmartDealCardProps> = ({ deal, onTagClick, 
       onClick={handleCardClick}
       className="group relative flex flex-col bg-white rounded-2xl sm:rounded-3xl p-1 border border-slate-100/90 shadow-bubble hover:shadow-bubble-hover hover:-translate-y-1.5 transition-all duration-300 ease-out cursor-pointer overflow-hidden select-none"
     >
-      {/* 📸 頂部：Pinterest 質感大圖封面 (完全依循圖片原始比例自適應) */}
-      <div className="relative w-full rounded-xl sm:rounded-2xl overflow-hidden bg-slate-100 mb-1.5 sm:mb-2 flex items-center justify-center min-h-[120px]">
+      {/* 📸 頂部：Pinterest 質感大圖封面 (嚴格預留 Aspect Ratio，完全消除圖片加載推擠跳動) */}
+      <div className={`relative w-full rounded-xl sm:rounded-2xl overflow-hidden bg-slate-100 mb-1.5 sm:mb-2 flex items-center justify-center ${getAspectRatioClass(deal.aspectRatio)}`}>
         {deal.imageUrl && !imgError ? (
-          <img
-            src={deal.imageUrl}
-            alt={deal.title}
-            onError={() => setImgError(true)}
-            className="w-full h-auto object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
-            loading={priority ? 'eager' : 'lazy'}
-            decoding="async"
-            fetchPriority={priority ? 'high' : 'auto'}
-          />
+          <>
+            {/* 圖片讀取中微光佔位底層 */}
+            {!isImgLoaded && (
+              <div className="absolute inset-0 bg-slate-200/70 animate-pulse" />
+            )}
+            <img
+              src={deal.imageUrl}
+              alt={deal.title}
+              onError={() => setImgError(true)}
+              onLoad={() => setIsImgLoaded(true)}
+              className={`w-full h-full object-cover group-hover:scale-105 transition-all duration-500 ease-out ${
+                isImgLoaded ? 'opacity-100' : 'opacity-0'
+              }`}
+              loading={priority ? 'eager' : 'lazy'}
+              decoding="async"
+              fetchPriority={priority ? 'high' : 'auto'}
+            />
+          </>
         ) : (
-          <div className="w-full h-36 flex flex-col items-center justify-center bg-gradient-to-br from-rose-50 to-orange-50 text-rose-400">
+          <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-rose-50 to-orange-50 text-rose-400">
             <ShoppingBag className="w-8 h-8 sm:w-10 sm:h-10 mb-1 opacity-60" />
             <span className="text-[10px] sm:text-[11px] font-semibold text-rose-500/80">{deal.merchant.name}</span>
           </div>
@@ -111,6 +138,12 @@ export const SmartDealCard: React.FC<SmartDealCardProps> = ({ deal, onTagClick, 
 
         {/* 浮動在圖片上的泡泡標籤 */}
         <div className="absolute top-1.5 left-1.5 sm:top-2 sm:left-2 flex items-center gap-1 sm:gap-1.5 z-10">
+          {((deal.tags && deal.tags.includes('#影片情報')) || (deal.imageUrl && deal.imageUrl.includes('video'))) && (
+            <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-full text-[9px] sm:text-[11px] font-bold text-white bg-slate-900/85 backdrop-blur-md shadow-xs">
+              <Video className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-rose-400" />
+              <span>影片</span>
+            </span>
+          )}
           {deal.isFlashDeal && (
             <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[9px] sm:text-[11px] font-extrabold text-white bg-rose-500/95 backdrop-blur-md shadow-xs">
               <Flame className="w-2.5 h-2.5 sm:w-3 sm:h-3 fill-current animate-pulse" />

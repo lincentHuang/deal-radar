@@ -48,8 +48,8 @@ export interface SmartDeal {
   isFlashDeal?: boolean; // 限時快閃
   
   // 數據與社群情報
-  source: 'affiliate' | 'social_listening' | 'merchant_post' | 'official';
-  sourcePlatform?: 'Dcard' | 'Momo' | 'Shopee' | 'PChome' | 'Costco' | 'Carrefour' | 'PXMart' | 'Convenience' | 'Merchant';
+  source: 'affiliate' | 'social_listening' | 'merchant_post' | 'official' | 'blog_curation';
+  sourcePlatform?: 'Dcard' | 'Momo' | 'Shopee' | 'PChome' | 'Costco' | 'Carrefour' | 'PXMart' | 'Convenience' | 'Merchant' | 'Supertaste' | 'Media';
   sourceUrl?: string;
   likeCount: number;
   commentCount: number;

@@ -11,6 +11,8 @@ import {
   batchToggleHotDealsAction,
   batchToggleFlashDealsAction
 } from '@/features/deals/server/deal.actions';
+import { adminPurgeExpiredDealsAction } from '../server/admin.actions';
+import { isDealExpired } from '@/features/deals/utils/date-utils';
 import { 
   Search, 
   Plus, 
@@ -88,8 +90,37 @@ export const AdminDealManager: React.FC<AdminDealManagerProps> = ({ initialDeals
   // 分頁狀態
   const [pageSize, setPageSize] = useState<number>(20);
   const [currentPage, setCurrentPage] = useState<number>(1);
+  const [isPurgingExpired, setIsPurgingExpired] = useState<boolean>(false);
   
   const { triggerHaptic } = useMobileNative();
+
+  // 即時計算已過期特惠卡片數量 (支援純日期與精確時間)
+  const expiredDealsCount = useMemo(() => {
+    const now = Date.now();
+    return deals.filter((d) => isDealExpired(d.endDate, now)).length;
+  }, [deals]);
+
+  const handlePurgeExpired = async () => {
+    triggerHaptic('warning');
+    setIsPurgingExpired(true);
+    try {
+      const res = await adminPurgeExpiredDealsAction();
+      if (res.success) {
+        if (res.purgedCount > 0) {
+          const purgedIdSet = new Set(res.purgedDeals.map((d) => d.id));
+          setDeals((prev) => prev.filter((d) => !purgedIdSet.has(d.id)));
+        }
+        showFeedback(res.message, 'success');
+        onDealsChange?.();
+      } else {
+        showFeedback(res.message, 'error');
+      }
+    } catch (err: any) {
+      showFeedback(err.message || '清理失敗', 'error');
+    } finally {
+      setIsPurgingExpired(false);
+    }
+  };
 
   // 當外部資料庫更新或 Props 變動時同步最新列表
   useEffect(() => {
@@ -401,6 +432,36 @@ export const AdminDealManager: React.FC<AdminDealManagerProps> = ({ initialDeals
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
+          {/* 一鍵清理過期情報按鈕 */}
+          <button
+            type="button"
+            disabled={isPurgingExpired}
+            onClick={handlePurgeExpired}
+            className={`px-3.5 py-2.5 rounded-2xl text-xs font-black shadow-xs transition-all flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer disabled:opacity-50 ${
+              expiredDealsCount > 0
+                ? 'bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-800 animate-pulse'
+                : 'bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700'
+            }`}
+            title="自動自資料庫永久刪除已過期之活動"
+          >
+            {isPurgingExpired ? (
+              <>
+                <Trash2 className="w-3.5 h-3.5 animate-spin text-rose-600" />
+                <span>清理中...</span>
+              </>
+            ) : (
+              <>
+                <Trash2 className={`w-3.5 h-3.5 ${expiredDealsCount > 0 ? 'text-rose-600' : 'text-slate-500'}`} />
+                <span>清理過期</span>
+                {expiredDealsCount > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-black">
+                    {expiredDealsCount}
+                  </span>
+                )}
+              </>
+            )}
+          </button>
+
           {duplicateGroups.length > 0 && (
             <button
               type="button"
@@ -508,6 +569,14 @@ export const AdminDealManager: React.FC<AdminDealManagerProps> = ({ initialDeals
                 >
                   <SlidersHorizontal className="w-3.5 h-3.5" />
                   <span>批量編輯 ({selectedIds.length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBatchDelete}
+                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-extrabold rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>批量刪除 ({selectedIds.length})</span>
                 </button>
                 <button
                   type="button"

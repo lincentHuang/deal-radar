@@ -1,6 +1,9 @@
 import 'server-only';
 import { GoogleGenAI } from '@google/genai';
 import { SmartDeal } from '@/features/deals/types/deal.types';
+import fs from 'fs';
+import path from 'path';
+import { normalizeBrandName, normalizeTags } from '../utils/brand-normalizer';
 
 export interface RawCrawledPost {
   merchantId: string;
@@ -10,6 +13,7 @@ export interface RawCrawledPost {
   images: string[];
   link: string;
   publishedTimeText?: string;
+  isVideo?: boolean;
 }
 
 /**
@@ -40,10 +44,44 @@ export function isCurrentMonthOrRecent(text: string, publishedTimeText?: string)
 }
 
 /**
- * 下載圖片轉為 Gemini Vision 的 inlineData 格式
+ * 下載圖片或讀取本地影片截圖轉為 Gemini Vision 的 inlineData 格式
  */
 async function fetchImagePart(url: string) {
   try {
+    if (!url) return null;
+
+    // Case 1: Base64 Data URL
+    if (url.startsWith('data:image/')) {
+      const parts = url.split(',');
+      const mimeMatch = parts[0].match(/:(.*?);/);
+      const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+      const base64Data = parts[1];
+      return {
+        inlineData: {
+          data: base64Data,
+          mimeType,
+        },
+      };
+    }
+
+    // Case 2: 本地靜態檔案（例如 /crops/video_snap_xxx.jpg 或 public/crops/...）
+    if (url.startsWith('/crops/') || url.startsWith('crops/') || url.startsWith('/')) {
+      const cleanPath = url.startsWith('/') ? url.slice(1) : url;
+      const fullPath = path.join(process.cwd(), 'public', cleanPath);
+      if (fs.existsSync(fullPath)) {
+        const buffer = await fs.promises.readFile(fullPath);
+        const ext = path.extname(fullPath).toLowerCase();
+        const mimeType = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+        return {
+          inlineData: {
+            data: buffer.toString('base64'),
+            mimeType,
+          },
+        };
+      }
+    }
+
+    // Case 3: 遠端 HTTP/HTTPS 圖片
     const res = await fetch(url, {
       headers: {
         'User-Agent':
@@ -79,15 +117,32 @@ export async function parseDealsWithGemini(post: RawCrawledPost): Promise<SmartD
   try {
     const ai = new GoogleGenAI({ apiKey });
 
-    // 下載前 5 張附圖供 Gemini Vision 多模態分析
+    // 輔助過濾無關圖片 (如大頭貼、廣告橫幅、Logo等)
+    const isInvalidOrAuthorImage = (imgSrc: string): boolean => {
+      if (!imgSrc) return true;
+      const lowerSrc = imgSrc.toLowerCase();
+      const blockedKeywords = [
+        'author', 'editor', 'reporter', 'journalist', 'avatar', 'profile', 'headshot',
+        'player', 'member', 'head_pic', 'photo_s', 'user_', 'writer', 'bio',
+        'coupon_shop', 'svg', 'logo', 'icon', 'banner', 'advertisement', 'sponsor',
+        'google_ads', 'dable', 'tracking', 'pixel', 'placeholder', 'default_user',
+        'favicon', 'share', 'line_', 'fb_', 'ig_', 'social', 'watermark', 'qrcode',
+        'app_download', 'badge', '1x1', 'spacer'
+      ];
+      return blockedKeywords.some((kw) => lowerSrc.includes(kw));
+    };
+
+    const validImages = post.images.filter((img) => !isInvalidOrAuthorImage(img));
+
+    // 下載前 5 張有效附圖供 Gemini Vision 多模態分析
     const imageParts: any[] = [];
-    const targetImages = post.images.slice(0, 5);
+    const targetImages = validImages.slice(0, 5);
     for (const imgUrl of targetImages) {
       const part = await fetchImagePart(imgUrl);
       if (part) imageParts.push(part);
     }
 
-    const imageIndexedText = post.images
+    const imageIndexedText = validImages
       .map((url, i) => `[圖片索引 ${i}]: ${url}`)
       .join('\n');
 
@@ -127,15 +182,19 @@ export async function parseDealsWithGemini(post: RawCrawledPost): Promise<SmartD
    - 若為「2串139元」（原價 259），折算後單串均價 discountPrice 應為 70，originalPrice 為 259，priceUnit 為「串」。
 6. 【🔥 活動起訖日期 OCR 精準解析（極重要）】：
    - 例如《活動日期：115.08.28 - 09.01》➔ 115年為民國年 (2026年)，轉換為 startDate: "2026-08-28", endDate: "2026-09-01"。
-7. 【🔥 原圖高清展示】：
-   - 保持原始清晰圖卡附圖（matchedImageIndex），不進行任何模糊小圖裁切，讓使用者能清楚閱讀海報整體與細節。
-8. 【🔥 標籤收斂規範】：
-   請嚴格依照【5層精準標籤體系】提煉 4~6 個標籤：
+7. 【🔥 原圖高清展示，排除記者/廣告頭像】：
+   - 保持原始清晰商品促銷圖卡附圖（matchedImageIndex）。
+   - ⚠️ 絕對不要選擇任何作者肖像、廣告橫幅 (Ad Banner) 或無關圖示！
+8. 【🔥 標籤收斂與純淨化】：
+   請嚴格依照【5層精準標籤體系】提煉 4~6 個標籤，嚴禁包含人名、記者姓名或廣告導流：
    ① 通路品牌：#全家、#7-ELEVEN、#康康5
    ② 核心大品類：#咖啡、#鮮食、#冰品、#飲品、#泡麵、#生活用品
    ③ 具體細品項：#霜淇淋、#奶茶、#雪糕、#衛生紙、#巧克力、#調酒
    ④ 規格/風味：#大杯、#清新紅柚、#開心果、#厚棒
    ⑤ 促銷機制：#買一送一、#買2送2、#加10元多1件、#第二件10元、#任選優惠
+9. 【🎥 影片截圖多模態識別（極重要）】：
+   - 當附圖為「影片畫面截圖 (Video Frame / Reel)」或影片封面時，促銷文字常出現在畫面正中央、底部字幕或品牌促銷字卡橫幅中，請精準辨識並提取。
+   - 若附圖為影片截圖或文章為影片形式，請務必在 tags 中加入 "#影片情報"。
 
 請以繁體中文回傳標準 JSON：
 {
@@ -220,15 +279,16 @@ ${post.text || '（無貼文文字，請重點識別圖片中的商品與價目�
 
       const validCategories = ['food', 'tech', 'grocery', 'fashion', 'entertainment', 'travel'];
       const normalizedCategory = validCategories.includes(d.category) ? d.category : 'food';
+      const normalizedMerchantName = normalizeBrandName(post.merchantName);
 
       return {
         id: `crawled-${post.merchantId}-${Date.now().toString(36)}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
-        title: d.title || `${post.merchantName} 檔期特惠`,
+        title: d.title || `${normalizedMerchantName} 檔期特惠`,
         subtitle: d.subtitle || post.text.slice(0, 90).replace(/\n+/g, ' '),
         category: normalizedCategory as any,
         channelType: 'offline',
         merchant: {
-          name: post.merchantName,
+          name: normalizedMerchantName,
           logo: post.merchantLogo,
           storeBranches: '全台實體門市',
         },
@@ -242,7 +302,13 @@ ${post.text || '（無貼文文字，請重點識別圖片中的商品與價目�
           post.merchantId === '7eleven'
             ? ['icash Pay (5%)', 'OPENPOINT 點數折抵', '國泰 CUBE 卡 (3%)']
             : ['全盈+PAY (5%)', 'FamiPay', '台新玫瑰卡 (3.8%)'],
-        tags: Array.isArray(d.tags) && d.tags.length > 0 ? d.tags : [`#${post.merchantId === '7eleven' ? '7-11' : '全家'}`, '#超商特價'],
+        tags: (() => {
+          const rawTagList = Array.isArray(d.tags) && d.tags.length > 0 ? d.tags : [`#${normalizedMerchantName}`, '#超商特價'];
+          if ((post.isVideo || selectedImage.includes('video')) && !rawTagList.includes('#影片情報')) {
+            rawTagList.push('#影片情報');
+          }
+          return normalizeTags(rawTagList, normalizedMerchantName);
+        })(),
         startDate: d.startDate || now.toISOString().split('T')[0],
         endDate: d.endDate || nextWeek.toISOString().split('T')[0],
         isHot: idx === 0,
@@ -316,6 +382,8 @@ function fallbackHeuristicMultiParser(post: RawCrawledPost): SmartDeal[] {
     const nextWeek = new Date();
     nextWeek.setDate(now.getDate() + 7);
 
+    const normalizedMerchantName = normalizeBrandName(post.merchantName);
+
     items.push({
       id: `crawled-${post.merchantId}-${Date.now().toString(36)}-${idx}`,
       title,
@@ -323,7 +391,7 @@ function fallbackHeuristicMultiParser(post: RawCrawledPost): SmartDeal[] {
       category: 'food',
       channelType: 'offline',
       merchant: {
-        name: post.merchantName,
+        name: normalizedMerchantName,
         logo: post.merchantLogo,
         storeBranches: '全台實體門市',
       },
@@ -337,7 +405,13 @@ function fallbackHeuristicMultiParser(post: RawCrawledPost): SmartDeal[] {
         post.merchantId === '7eleven'
           ? ['icash Pay (5%)', 'OPENPOINT 點數折抵', '國泰 CUBE 卡 (3%)']
           : ['全盈+PAY (5%)', 'FamiPay', '台新玫瑰卡 (3.8%)'],
-      tags: [`#${post.merchantId === '7eleven' ? '7-11' : '全家'}`, '#超商特價'],
+      tags: (() => {
+        const rawTagList = [`#${normalizedMerchantName}`, '#超商特價'];
+        if ((post.isVideo || selectedImage.includes('video')) && !rawTagList.includes('#影片情報')) {
+          rawTagList.push('#影片情報');
+        }
+        return normalizeTags(rawTagList, normalizedMerchantName);
+      })(),
       startDate: now.toISOString().split('T')[0],
       endDate: nextWeek.toISOString().split('T')[0],
       isHot: idx === 0,

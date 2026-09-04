@@ -1,50 +1,58 @@
 import { NextResponse } from 'next/server';
-import { crawlFacebookDeals, triggerAsyncCrawlerJob } from '@/features/deals/server/fb-crawler.service';
-import { upsertCrawledDeals } from '@/features/deals/server/deals-dal';
+import { 
+  getDueCrawlerTargets, 
+  executeCrawlPipelineForTargets 
+} from '@/features/deals/server/crawler-scheduler-engine';
+import { getCrawlerTargets } from '@/features/admin/server/admin-dal';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const isSync = searchParams.get('sync') === 'true';
+    const forceAll = searchParams.get('all') === 'true';
 
-    // 若指定同步模式（供手動自測），等待爬蟲完成
-    if (isSync) {
-      console.log('[API /api/cron/crawl-fb] Triggered synchronous FB crawl...');
-      const deals = await crawlFacebookDeals();
-      const result = await upsertCrawledDeals(deals);
+    let targetsToCrawl: any[] = [];
+    let reason = '';
+
+    if (forceAll) {
+      const allTargets = await getCrawlerTargets();
+      targetsToCrawl = allTargets.filter((t) => t.enabled);
+      reason = '全站強制排程執行';
+    } else {
+      const { dueTargets, triggerReason } = await getDueCrawlerTargets(new Date());
+      targetsToCrawl = dueTargets;
+      reason = triggerReason;
+    }
+
+    if (targetsToCrawl.length === 0) {
       return NextResponse.json({
         success: true,
-        mode: 'synchronous',
+        message: `目前無應執行的排程站點 (狀態: ${reason})`,
         timestamp: new Date().toISOString(),
-        crawledCount: deals.length,
-        insertedCount: result.insertedCount,
-        totalDealsCount: result.totalCount,
+        crawledCount: 0,
       });
     }
 
-    // 預設採用「異步非阻塞 (Asynchronous)」排程架構
-    console.log('[API /api/cron/crawl-fb] Received request. Dispatching async background crawl job...');
-    triggerAsyncCrawlerJob();
+    console.log(`[API /api/cron/crawl-fb] Executing crawl for ${targetsToCrawl.length} targets (${reason})...`);
+    const result = await executeCrawlPipelineForTargets(targetsToCrawl, 'scheduled', reason);
 
-    return NextResponse.json(
-      {
-        success: true,
-        mode: 'asynchronous',
-        status: 'processing',
-        message: '已成功於背景異步啟動超商、量販、星巴克、麥當勞、肯德基、手搖飲與 Costco 爬蟲與 Gemini AI 整合管線',
-        timestamp: new Date().toISOString(),
-        schedule: '每日 4 大黃金窗口 (08:30, 12:00, 18:00, 21:30) + 週四超商週末大促衝刺 (17:00, 18:00, 19:00)',
-      },
-      { status: 202 }
-    );
-  } catch (error) {
+    return NextResponse.json({
+      success: true,
+      mode: 'scheduled',
+      timestamp: new Date().toISOString(),
+      reason,
+      crawledCount: result.crawledCount,
+      insertedCount: result.insertedCount,
+      updatedCount: result.updatedCount,
+      totalDealsCount: result.totalDealsCount,
+    });
+  } catch (error: any) {
     console.error('[API /api/cron/crawl-fb] Error:', error);
     return NextResponse.json(
       {
         success: false,
-        error: (error as Error).message,
+        error: error.message || '排程執行失敗',
         timestamp: new Date().toISOString(),
       },
       { status: 500 }

@@ -1,6 +1,6 @@
 # 🛒 全通路特價情報聚合平台 — 產品需求規格書 (PRD)
 
-> **版本**：v1.22.0 (精確重複情報比對：活動名稱與品項 1-Char 容錯演算法規範)  
+> **版本**：v1.23.0 (畫面瀏覽無跳動與資料確實讀取載入架構規範)  
 > **負責角色**：`@PM`  
 > **狀態**：需求已鎖定 (Approved)  
 > **交付檔案**：`docs/PRD-deal-aggregation-platform.md`
@@ -8,6 +8,12 @@
 ---
 
 ## 📝 1.3 細部修改紀錄 (Changelog)
+* **v1.23.0 (2026-09-02)**:
+  - **🛡️ 畫面瀏覽防跳動與資料確實讀取載入機制（Anti-Jitter & Stable Data Loading Experience）**：
+    - **消滅 Hydration 欄數重排位移（Zero CLS on First Paint）**：在客戶端未完成視窗寬度偵測與欄數確定前（`!isMounted`），強制以 12 筆響應式骨架屏（`DealMasonrySkeleton`）穩定呈現，杜絕桌機端由 SSR 雙欄跳動至四欄的卡片飛位問題。
+    - **確實讀好再顯示（Stable Transition without Instant Partial Match Jitter）**：徹底移除切換標籤/篩選時僅依賴本機少數暫存卡片先行閃爍（Instant Matches）的雙重跳動問題。切換條件時進入平穩 Loading 態，待伺服器最新資料完全讀取完畢後，一次性流暢呈現真實卡片。
+    - **大圖容器 Aspect Ratio 嚴格預留（Reserved Image Aspect Ratio）**：`SmartDealCard` 圖片容器全面依據卡片原始比例（預設 `4:3`）進行 Aspect Ratio 高度鎖定，圖片異步載入完成後直接在背景平滑顯現，完全不推擠下方卡片（CLS 歸零）。
+    - **移除外層破壞性 DOM 重構 Key**：消除容器層 `key={selectedTag}` 造成的全域 DOM 樹重新掛載與閃白，確保手勢與標籤切換極致絲滑。
 * **v1.22.0 (2026-08-31)**:
   - **🔍 雙核心精準重複情報比對與 1-Char 容錯演算法（Precision Duplicate Deal Detection & 1-Char Fault Tolerance）**：
     - **觸發門檻收斂**：徹底移除過往寬鬆的子字串包含（`includes`）與單純相同來源 URL 判定，僅在「活動名稱」或「活動品項」完全一樣（容錯一個字）時才進行重複比對歸組。

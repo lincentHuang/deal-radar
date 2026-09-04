@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>資料爬蟲與 AI 拆解流程圖 (中文版) - 全通路特價情報聚合平台</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;600;700&family=Noto+Serif+TC:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: #ececec;
+      color: #2d3142;
+      font-family: 'Geist', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 20px;
+      min-height: 100vh;
+    }
+    .diagram-container {
+      background: #f5f5f5;
+      border: 1px solid rgba(45, 49, 66, 0.12);
+      border-radius: 12px;
+      padding: 32px;
+      max-width: 1200px;
+      width: 100%;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+    }
+    .header {
+      margin-bottom: 24px;
+    }
+    h1 {
+      font-family: 'Instrument Serif', 'Noto Serif TC', serif;
+      font-size: 2rem;
+      font-weight: 700;
+      color: #2d3142;
+      letter-spacing: -0.02em;
+      margin-bottom: 6px;
+    }
+    .subtitle {
+      font-family: 'Geist Mono', 'Noto Sans TC', monospace;
+      font-size: 0.82rem;
+      color: #4f5d75;
+      letter-spacing: 0.06em;
+    }
+    svg {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="diagram-container">
+    <div class="header">
+      <h1>智慧資料爬蟲與 AI 視覺拆解管線圖 (中文版)</h1>
+      <p class="subtitle">端到端資料流與推理管線 // PLAYWRIGHT + GEMINI 2.0 FLASH + 1-CHAR LEVENSHTEIN 去重</p>
+    </div>
+
+    <svg viewBox="0 0 1100 620" width="100%" height="620" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/>
+        </marker>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/>
+        </marker>
+
+        <pattern id="dots" width="20" height="20" patternUnits="userSpaceOnUse">
+          <circle cx="1" cy="1" r="0.8" fill="rgba(45,49,66,0.08)"/>
+        </pattern>
+      </defs>
+
+      <!-- 底層畫布 -->
+      <rect width="100%" height="100%" fill="#f5f5f5" rx="8"/>
+      <rect width="100%" height="100%" fill="url(#dots)" opacity="0.6"/>
+
+      <!-- ================= 5 大階段區域邊界 ================= -->
+      <!-- 階段 1: 多通道情報來源 -->
+      <rect x="25" y="70" width="185" height="510" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.12)" stroke-width="0.8"/>
+      <rect x="35" y="58" width="120" height="18" rx="3" fill="#f5f5f5"/>
+      <text x="95" y="71" fill="#7a8399" font-size="8.5" font-family="'Geist Mono', 'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle" letter-spacing="0.08em">1. 多通道情報來源</text>
+
+      <!-- 階段 2: 爬蟲排程與採集引擎 -->
+      <rect x="235" y="70" width="185" height="510" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.12)" stroke-width="0.8"/>
+      <rect x="245" y="58" width="130" height="18" rx="3" fill="#f5f5f5"/>
+      <text x="310" y="71" fill="#7a8399" font-size="8.5" font-family="'Geist Mono', 'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle" letter-spacing="0.08em">2. 爬蟲排程與採集</text>
+
+      <!-- 階段 3: Gemini AI 視覺解析 (核心焦點) -->
+      <rect x="445" y="70" width="205" height="510" rx="8" fill="rgba(235,108,54,0.02)" stroke="rgba(235,108,54,0.25)" stroke-dasharray="4,4" stroke-width="0.8"/>
+      <rect x="455" y="58" width="145" height="18" rx="3" fill="#f5f5f5"/>
+      <text x="527" y="71" fill="#eb6c36" font-size="8.5" font-family="'Geist Mono', 'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle" letter-spacing="0.08em">3. GEMINI 視覺解析</text>
+
+      <!-- 階段 4: 1-Char 去重與權重仲裁 -->
+      <rect x="675" y="70" width="195" height="510" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.12)" stroke-width="0.8"/>
+      <rect x="685" y="58" width="140" height="18" rx="3" fill="#f5f5f5"/>
+      <text x="755" y="71" fill="#7a8399" font-size="8.5" font-family="'Geist Mono', 'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle" letter-spacing="0.08em">4. 容錯去重與權重仲裁</text>
+
+      <!-- 階段 5: 資料庫持久化與成果統計 -->
+      <rect x="895" y="70" width="180" height="510" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.12)" stroke-width="0.8"/>
+      <rect x="905" y="58" width="130" height="18" rx="3" fill="#f5f5f5"/>
+      <text x="970" y="71" fill="#7a8399" font-size="8.5" font-family="'Geist Mono', 'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle" letter-spacing="0.08em">5. 雲端入庫與成果統計</text>
+
+      <!-- ================= 連接路徑 ================= -->
+      <!-- 來源至爬蟲引擎 -->
+      <path d="M 195,135 H 250" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <path d="M 195,245 H 250" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <path d="M 195,355 H 250" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+      <!-- 爬蟲引擎至 Gemini AI -->
+      <path d="M 405,245 H 460" fill="none" stroke="#eb6c36" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+
+      <!-- Gemini AI 至去重引擎 -->
+      <path d="M 635,245 H 690" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+      <!-- 去重引擎至資料庫入庫 -->
+      <path d="M 855,245 H 910" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+      <!-- 自動過期清理至資料庫 -->
+      <path d="M 405,465 H 910" fill="none" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+
+      <!-- ================= 各階段核心節點 ================= -->
+
+      <!-- [階段 1: 多通道情報來源節點] -->
+      <rect x="40" y="100" width="155" height="70" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1.2"/>
+      <text x="117" y="123" fill="#2d3142" font-size="11.5" font-family="'Geist', 'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle">🥇 官方 FB 粉絲專頁</text>
+      <text x="117" y="142" fill="#7a8399" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">社群即時發文 (優先級 1)</text>
+      <text x="117" y="156" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">全家 / 7-11 / 全聯 / 好市多</text>
+
+      <rect x="40" y="210" width="155" height="70" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1.2"/>
+      <text x="117" y="233" fill="#2d3142" font-size="11.5" font-family="'Geist', 'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle">🥈 品牌官方網站</text>
+      <text x="117" y="252" fill="#7a8399" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">官網正式活動 (優先級 2)</text>
+      <text x="117" y="266" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">速食連鎖 / 手搖飲最新公告</text>
+
+      <rect x="40" y="320" width="155" height="70" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1.2"/>
+      <text x="117" y="343" fill="#2d3142" font-size="11.5" font-family="'Geist', 'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle">🥉 專題媒體 / 部落格</text>
+      <text x="117" y="362" fill="#7a8399" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">報導整理 (優先級 3)</text>
+      <text x="117" y="376" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">食尚玩家 / WalkerLand 整理</text>
+
+      <rect x="40" y="430" width="155" height="60" rx="6" fill="rgba(45,49,66,0.04)" stroke="#7a8399" stroke-width="0.8" stroke-dasharray="3,3"/>
+      <text x="117" y="455" fill="#2d3142" font-size="11" font-family="'Geist', 'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle">品牌小編 DM 海報</text>
+      <text x="117" y="473" fill="#7a8399" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">/merchant 自主上傳管道</text>
+
+      <!-- [階段 2: 爬蟲排程與採集引擎節點] -->
+      <rect x="250" y="100" width="155" height="150" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1.2"/>
+      <text x="327" y="125" fill="#2d3142" font-size="12" font-family="'Geist', 'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle">Playwright 爬蟲引擎</text>
+      <text x="327" y="145" fill="#eb6c36" font-size="8.5" font-family="'Geist Mono', monospace" font-weight="600" text-anchor="middle">Headless Chromium</text>
+      <text x="327" y="165" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">• 模擬滾動載入貼文與圖卡</text>
+      <text x="327" y="180" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">• 提取讚數、留言與來源網址</text>
+      <text x="327" y="195" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">• Cheerio 高效萃取 HTML 標籤</text>
+      <text x="327" y="210" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">• 當月/近期有效活動前置過濾</text>
+      <text x="327" y="232" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">RawCrawledPost 結構載荷</text>
+
+      <rect x="250" y="280" width="155" height="120" rx="6" fill="#f5f5f5" stroke="#4f5d75" stroke-width="1"/>
+      <text x="327" y="305" fill="#2d3142" font-size="11.5" font-family="'Geist', 'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle">4 大黃金窗口排程</text>
+      <text x="327" y="325" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">08:30 早餐 · 12:00 午餐</text>
+      <text x="327" y="340" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">18:00 下班 · 21:30 爆文</text>
+      <text x="327" y="358" fill="#eb6c36" font-size="8.5" font-family="'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle">週四 17/18/19 週末衝刺</text>
+      <text x="327" y="378" fill="#7a8399" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">01:00~07:30 深夜靜默省電</text>
+
+      <rect x="250" y="430" width="155" height="60" rx="6" fill="rgba(45,49,66,0.04)" stroke="#7a8399" stroke-width="0.8"/>
+      <text x="327" y="455" fill="#2d3142" font-size="11" font-family="'Geist', 'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle">過期自動清理 (Purge)</text>
+      <text x="327" y="473" fill="#7a8399" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">每輪自動清除已失效過期活動</text>
+
+      <!-- [階段 3: Gemini 2.0 Flash AI 節點] -->
+      <rect x="460" y="100" width="175" height="390" rx="6" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1.6"/>
+      <text x="547" y="125" fill="#2d3142" font-size="12" font-family="'Geist', 'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle">Gemini 2.0 Flash</text>
+      <text x="547" y="145" fill="#eb6c36" font-size="9" font-family="'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle">多模態視覺智能拆解</text>
+      
+      <rect x="475" y="165" width="145" height="135" rx="4" fill="#ffffff" stroke="#eb6c36" stroke-width="0.8"/>
+      <text x="547" y="185" fill="#2d3142" font-size="10.5" font-family="'Geist', 'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle">1-to-N 全品項自動拆解</text>
+      <text x="547" y="205" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">• 海報多格獨立商品切片</text>
+      <text x="547" y="220" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">• 16 筆商品圖卡 1:1 綁定</text>
+      <text x="547" y="235" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">• 共享促銷規則自動繼承</text>
+      <text x="547" y="250" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">• 單一報導多品牌分群建卡</text>
+      <text x="547" y="280" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">SmartDeal[] 實體陣列</text>
+
+      <rect x="475" y="315" width="145" height="155" rx="4" fill="#ffffff" stroke="#eb6c36" stroke-width="0.8"/>
+      <text x="547" y="335" fill="#2d3142" font-size="10.5" font-family="'Geist', 'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle">結構化 7 大要素提取</text>
+      <text x="547" y="355" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">1. title (商品特惠標題)</text>
+      <text x="547" y="370" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">2. price (特價與原價)</text>
+      <text x="547" y="385" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">3. discountLabel (買1送1)</text>
+      <text x="547" y="400" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">4. startDate / endDate</text>
+      <text x="547" y="415" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">5. category (超商/美食)</text>
+      <text x="547" y="430" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">6. tags (4~6 個推薦標籤)</text>
+      <text x="547" y="445" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">7. 適用信用卡加碼回饋</text>
+
+      <!-- [階段 4: 去重與權重仲裁節點] -->
+      <rect x="690" y="100" width="165" height="230" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1.2"/>
+      <text x="772" y="125" fill="#2d3142" font-size="11.5" font-family="'Geist', 'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle">1-Char 容錯去重演算法</text>
+      <text x="772" y="145" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">最小編輯距離 ≤ 1</text>
+      <text x="772" y="170" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">• 徹底廢除寬鬆子字串比對</text>
+      <text x="772" y="185" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">• 精準捕捉錯字與規格差異</text>
+      <text x="772" y="200" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">  (拿堤 vs 那堤 · 大美 vs 中美)</text>
+      <text x="772" y="220" fill="#eb6c36" font-size="8.5" font-family="'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle">情報來源權重仲裁：</text>
+      <text x="772" y="235" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">官方粉專 > 官網 > 媒體</text>
+      <text x="772" y="255" fill="#7a8399" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">防止次級報導覆蓋第一手情報</text>
+
+      <rect x="690" y="350" width="165" height="140" rx="6" fill="#f5f5f5" stroke="#4f5d75" stroke-width="1"/>
+      <text x="772" y="375" fill="#2d3142" font-size="11.5" font-family="'Geist', 'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle">持久化防打擾機制</text>
+      <text x="772" y="395" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">IgnoredDuplicatePair</text>
+      <text x="772" y="415" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">• 點擊「全部保留」持久記錄</text>
+      <text x="772" y="430" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">• 舊重複對不再重複提示</text>
+      <text x="772" y="450" fill="#eb6c36" font-size="8.5" font-family="'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle">• 遇全新重複動態重觸發</text>
+
+      <!-- [階段 5: 資料庫入庫與成果統計節點] -->
+      <rect x="910" y="100" width="150" height="130" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1.2"/>
+      <text x="985" y="125" fill="#2d3142" font-size="11.5" font-family="'Geist', 'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle">Neon PostgreSQL</text>
+      <text x="985" y="145" fill="#eb6c36" font-size="8.5" font-family="'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle">Prisma 智慧寫入入庫</text>
+      <text x="985" y="165" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">• 自動新建立特價卡片</text>
+      <text x="985" y="180" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">• 更新既有特惠價格與規格</text>
+      <text x="985" y="195" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">• 綁定社群讚數與官方連結</text>
+
+      <rect x="910" y="250" width="150" height="140" rx="6" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1.2"/>
+      <text x="985" y="275" fill="#2d3142" font-size="11.5" font-family="'Geist', 'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle">爬蟲成果彈窗指標</text>
+      <text x="985" y="295" fill="#eb6c36" font-size="8.5" font-family="'Noto Sans TC', sans-serif" font-weight="600" text-anchor="middle">CrawlerResultModal</text>
+      <text x="985" y="318" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">✨ 新建立卡片數</text>
+      <text x="985" y="333" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">🔄 已更新情報數</text>
+      <text x="985" y="348" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">🧹 自動清理過期數</text>
+      <text x="985" y="363" fill="#4f5d75" font-size="8.5" font-family="'Noto Sans TC', sans-serif" text-anchor="middle">📊 總解析特惠筆數</text>
+
+      <!-- 頁尾註腳 -->
+      <text x="25" y="605" fill="#7a8399" font-size="8.5" font-family="'Instrument Serif', 'Noto Serif TC', serif" font-style="italic">資料爬蟲與 AI 拆解管線圖 (中文版) · Diagram Design Editorial Standard v2.6</text>
+    </svg>
+  </div>
+</body>
+</html>

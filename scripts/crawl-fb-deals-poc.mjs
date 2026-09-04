@@ -65,10 +65,30 @@ export async function crawlFacebookPages(targets) {
             .map(img => img.src)
             .filter(src => src && !src.includes('rsrc.php') && !src.includes('emoji') && !src.includes('data:image'));
 
+          // Video & Poster Detection
+          const videoEl = art.querySelector('video');
+          const hasVideo = !!videoEl || !!art.querySelector('div[data-pagelet*="Video"], [aria-label*="影片"], [aria-label*="video"]');
+          let videoPoster = videoEl?.poster || videoEl?.getAttribute('poster') || '';
+          if (!videoPoster) {
+            const bgEls = Array.from(art.querySelectorAll('[style*="background-image"]'));
+            for (const el of bgEls) {
+              const bgStyle = el.style.backgroundImage;
+              const match = bgStyle.match(/url\(["']?(https?:\/\/[^"')]+)["']?\)/);
+              if (match && match[1] && !match[1].includes('rsrc.php')) {
+                videoPoster = match[1];
+                break;
+              }
+            }
+          }
+
+          if (images.length === 0 && videoPoster) {
+            images.push(videoPoster);
+          }
+
           // Get permalink
           const links = Array.from(art.querySelectorAll('a'))
             .map(a => a.href)
-            .filter(href => href && (href.includes('/posts/') || href.includes('story.php') || href.includes('fbid=')));
+            .filter(href => href && (href.includes('/posts/') || href.includes('story.php') || href.includes('fbid=') || href.includes('/reel/')));
 
           // Remove common UI noise from text
           const cleanedText = rawText
@@ -83,6 +103,7 @@ export async function crawlFacebookPages(targets) {
             merchantId: merchantInfo.id,
             postText: cleanedText,
             images: Array.from(new Set(images)),
+            hasVideo,
             sourceUrl: links[0] || merchantInfo.url,
             crawledAt: new Date().toISOString()
           });
@@ -108,13 +129,29 @@ export async function crawlFacebookPages(targets) {
   const targets = [
     { id: '7eleven', name: '7-ELEVEN', url: 'https://www.facebook.com/711open' },
     { id: 'familymart', name: 'FamilyMart 全家', url: 'https://www.facebook.com/FamilyMart' },
+    { id: 'pxmart', name: '全聯福利中心', url: 'https://www.facebook.com/pxmartchannel' },
+    { id: 'carrefour', name: '家樂福 Carrefour', url: 'https://www.facebook.com/carrefour.tw' },
     { id: 'costco', name: 'Costco 好市多特價情報', url: 'https://www.facebook.com/DAYBUY.TW' },
+    { id: 'watsons', name: '屈臣氏 Watsons', url: 'https://www.facebook.com/WatsonsTaiwan' },
+    { id: 'cosmed', name: '康是美 COSMED', url: 'https://www.facebook.com/cosmedtw' },
+    { id: 'poya', name: '寶雅 POYA', url: 'https://www.facebook.com/poyatw' },
     { id: 'starbucks', name: '星巴克 Starbucks', url: 'https://www.facebook.com/starbuckstaiwan' },
     { id: 'mcdonalds', name: '麥當勞 McDonald\'s', url: 'https://www.facebook.com/mcdonalds.tw' },
     { id: 'kfc', name: '肯德基 KFC', url: 'https://www.facebook.com/kfctaiwan' },
+    { id: 'mosburger', name: '摩斯漢堡 MOS Burger', url: 'https://www.facebook.com/mosburger.tw' },
+    { id: 'burgerking', name: '漢堡王 Burger King', url: 'https://www.facebook.com/BurgerKingTW' },
+    { id: 'pizzahut', name: '必勝客 Pizza Hut', url: 'https://www.facebook.com/PizzaHut.TW' },
+    { id: 'sushiro', name: '壽司郎 Sushiro Taiwan', url: 'https://www.facebook.com/Sushiro.TW' },
+    { id: 'kurasushi', name: '藏壽司 Kura Sushi', url: 'https://www.facebook.com/kurasushi.tw' },
+    { id: 'wanggroup', name: '王品集團 / 王品瘋美食', url: 'https://www.facebook.com/wanggroup.brand' },
     { id: 'milksha', name: '迷客夏 Milksha', url: 'https://www.facebook.com/MilkshaTW' },
     { id: 'macu', name: '麻古茶坊 MACU', url: 'https://www.facebook.com/macu2008.tw' },
     { id: 'kebuke', name: '可不可熟成紅茶 KEBUKE', url: 'https://www.facebook.com/kebuke2008' },
+    { id: 'dejeng', name: '得正 Oolong Tea', url: 'https://www.facebook.com/dejeng.oolongtea' },
+    { id: 'misterdonut', name: 'Mister Donut 統一多拿滋', url: 'https://www.facebook.com/Japan.misterdonut' },
+    { id: 'coldstone', name: 'COLD STONE 酷聖石冰淇淋', url: 'https://www.facebook.com/ColdStone.tw' },
+    { id: 'uniqlo', name: 'UNIQLO Taiwan', url: 'https://www.facebook.com/uniqlo.tw' },
+    { id: 'tkec', name: '燦坤 3C', url: 'https://www.facebook.com/TKEC.tw' },
   ];
 
   const results = await crawlFacebookPages(targets);

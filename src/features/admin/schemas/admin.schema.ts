@@ -7,22 +7,28 @@ export const AdminPinVerifySchema = z.object({
 
 export const CrawlerScheduleModeSchema = z.enum(['inherit', 'custom', 'interval']);
 
+export const CrawlerTargetTypeSchema = z.enum(['fanpage', 'official_web', 'blog_media', 'community']);
+
 export const CrawlerTargetConfigSchema = z.object({
   id: z.string(),
   name: z.string().min(1, '通路名稱必填'),
   url: z.string().url('請輸入合法的 URL'),
   logo: z.string().url().optional().or(z.literal('')),
+  targetType: CrawlerTargetTypeSchema.default('official_web'),
   defaultCategory: z.enum(['food', 'grocery', 'tech', 'fashion', 'entertainment', 'travel']),
   enabled: z.boolean().default(true),
   lastCrawledAt: z.string().optional(),
   lastStatus: z.enum(['success', 'idle', 'running', 'error']).default('idle'),
   crawledCount: z.number().int().nonnegative().default(0),
+  activeDealsCount: z.number().int().nonnegative().optional(),
   
   // 個別排程配置
   scheduleMode: CrawlerScheduleModeSchema.default('inherit'),
   customScheduleTimes: z.array(z.string()).default([]),
   customIntervalMinutes: z.number().int().min(5).max(1440).default(60),
   crawlRule: z.string().optional(),
+  brandGroup: z.string().optional(),
+  sortOrder: z.number().int().default(0),
   isCustom: z.boolean().default(false),
 });
 
@@ -30,11 +36,14 @@ export const CreateCrawlerTargetSchema = z.object({
   name: z.string().min(1, '請輸入通路/網站名稱'),
   url: z.string().url('請輸入有效的網站 URL'),
   logo: z.string().url().optional().or(z.literal('')),
+  targetType: CrawlerTargetTypeSchema.default('blog_media'),
   defaultCategory: z.enum(['food', 'grocery', 'tech', 'fashion', 'entertainment', 'travel']).default('food'),
   scheduleMode: CrawlerScheduleModeSchema.default('inherit'),
   customScheduleTimes: z.string().optional(),
   customIntervalMinutes: z.coerce.number().int().min(5).max(1440).default(60),
   crawlRule: z.string().optional(),
+  brandGroup: z.string().optional(),
+  sortOrder: z.coerce.number().int().optional(),
 });
 
 export const BatchUpdateCrawlerScheduleSchema = z.object({
@@ -43,6 +52,7 @@ export const BatchUpdateCrawlerScheduleSchema = z.object({
   scheduleMode: CrawlerScheduleModeSchema.optional(),
   customScheduleTimes: z.array(z.string()).optional(),
   customIntervalMinutes: z.number().int().min(5).max(1440).optional(),
+  brandGroup: z.string().optional(),
 });
 
 export const CrawlerScheduleConfigSchema = z.object({

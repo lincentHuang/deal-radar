@@ -2,6 +2,7 @@ import 'server-only';
 import { SmartDeal } from '@/features/deals/types/deal.types';
 import { chromium } from 'playwright';
 import { upsertCrawledDeals } from './deals-dal';
+import { normalizeBrandName, normalizeTags } from '../utils/brand-normalizer';
 
 export interface OfficialWebTarget {
   id: string;
@@ -144,7 +145,7 @@ export async function crawlFamilyMartLetsCafeNews(): Promise<SmartDeal[]> {
         category: 'food',
         channelType: 'offline',
         merchant: {
-          name: '全家 FamilyMart',
+          name: normalizeBrandName('全家 FamilyMart'),
           logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/30/FamilyMart_Logo.svg/1024px-FamilyMart_Logo.svg.png',
           storeBranches: '全台全家門市',
         },
@@ -156,7 +157,7 @@ export async function crawlFamilyMartLetsCafeNews(): Promise<SmartDeal[]> {
         ],
         targetItems: ["Let's Café 咖啡系列", "minimore 甜點", "酷繽沙/酷繽球系列"],
         eligibleCards: ['全盈+PAY', 'FamiPay', '悠遊卡 / 一卡通', '信用卡通用'],
-        tags: ['#全家', "#Let'sCafé", '#咖啡優惠', '#甜點半價', '#minimore'],
+        tags: normalizeTags(['#全家', "#Let'sCafé", '#咖啡優惠', '#甜點半價', '#minimore'], '全家'),
         startDate,
         endDate,
         isHot: true,

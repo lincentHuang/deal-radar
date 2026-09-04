@@ -229,4 +229,40 @@ export async function batchToggleFlashDealsAction(
   }
 }
 
+/**
+ * 手動或自動觸發清理過期情報 Server Action
+ */
+export async function purgeExpiredDealsAction(): Promise<{
+  success: boolean;
+  message: string;
+  purgedCount: number;
+  purgedBookmarkCount: number;
+  purgedDeals: { id: string; title: string; endDate: string }[];
+}> {
+  try {
+    const { purgeExpiredDeals } = await import('@/features/deals/server/deals-dal');
+    const result = await purgeExpiredDeals();
 
+    revalidatePath('/');
+    revalidatePath('/admin');
+    revalidatePath('/merchant');
+
+    return {
+      success: true,
+      message: result.purgedCount > 0
+        ? `🎉 已成功從資料庫清理 ${result.purgedCount} 筆已過期特惠活動（包含 ${result.purgedBookmarkCount} 筆孤立收藏）！`
+        : '✨ 資料庫目前無過期活動，所有情報皆處於有效期限內。',
+      purgedCount: result.purgedCount,
+      purgedBookmarkCount: result.purgedBookmarkCount,
+      purgedDeals: result.purgedDeals,
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      message: error.message || '清理過期活動時發生錯誤',
+      purgedCount: 0,
+      purgedBookmarkCount: 0,
+      purgedDeals: [],
+    };
+  }
+}
