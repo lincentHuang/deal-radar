@@ -2,11 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/purge-expired",
-      "schedule": "0 * * * *"
-    },
-    {
-      "path": "/api/cron/crawl-fb",
-      "schedule": "30 0,4,10,13 * * *"
+      "schedule": "0 16 * * *"
     }
   ]
 }
