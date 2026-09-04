@@ -1,0 +1,51 @@
+name: 定時自動特惠爬蟲與 AI 解析入庫 (Daily Scheduled Crawler)
+
+on:
+  schedule:
+    # GitHub Actions 使用 UTC 時間：
+    # 00:30 UTC = 台灣時間 08:30 (🌅 早鳥通勤 / 早餐咖啡優惠)
+    - cron: '30 0 * * *'
+    # 04:00 UTC = 台灣時間 12:00 (🍱 午間外食 / 手搖飲買一送一)
+    - cron: '0 4 * * *'
+    # 10:00 UTC = 台灣時間 18:00 (🌆 下班採買 / 超市晚鳥促銷)
+    - cron: '0 10 * * *'
+    # 13:30 UTC = 台灣時間 21:30 (🌙 晚間爆文 / 次日早鳥搶先看)
+    - cron: '30 13 * * *'
+
+  # 支援在 GitHub 網頁介面上點擊「Run workflow」按鈕手動隨時觸發測試
+  workflow_dispatch:
+
+concurrency:
+  group: scheduled-crawler
+  cancel-in-progress: false
+
+jobs:
+  crawl-and-sync:
+    name: 執行四大黃金時段爬蟲與 Gemini 入庫
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: 檢出專案代碼 (Checkout)
+        uses: actions/checkout@v4
+
+      - name: 設定 Node.js 執行環境
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: 安裝專案依賴套件 (Install Dependencies)
+        run: npm ci
+
+      - name: 安裝 Playwright Chromium 瀏覽器
+        run: npx playwright install --with-deps chromium
+
+      - name: 生成 Prisma Client
+        run: npx prisma generate
+
+      - name: 執行定時爬蟲 + Gemini AI 解析 + 資料庫入庫
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: node scripts/run-scheduled-crawl.mjs

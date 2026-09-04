@@ -157,3 +157,80 @@ model AdCampaign {
   @@index([status])
   @@map("ad_campaigns")
 }
+
+model CrawlerLog {
+  id            String   @id @default(cuid())
+  targetId      String?
+  targetName    String
+  type          String   // "scheduled", "manual", "auto_purge"
+  status        String   // "success", "failed", "running"
+  crawledCount  Int      @default(0)
+  insertedCount Int      @default(0)
+  message       String
+  details       Json?
+  createdAt     DateTime @default(now())
+
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+  @@map("crawler_logs")
+}
+
+model CrawlerTarget {
+  id                    String    @id
+  name                  String
+  url                   String
+  logo                  String?
+  targetType            String    @default("fanpage") // "fanpage", "official_web", "blog_media"
+  defaultCategory       String    @default("food")
+  enabled               Boolean   @default(true)
+  lastCrawledAt         DateTime?
+  lastStatus            String    @default("idle") // "idle", "success", "failed", "running"
+  crawledCount          Int       @default(0)
+  scheduleMode          String    @default("inherit") // "inherit", "custom", "interval"
+  customScheduleTimes   String[]
+  customIntervalMinutes Int       @default(60)
+  crawlRule             String?
+  brandGroup            String?   // 所屬品牌/主群組（例如：全家 FamilyMart、7-ELEVEN、家樂福）
+  sortOrder             Int       @default(0) // 自訂拖曳顯示排序
+  isCustom              Boolean   @default(false)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([enabled])
+  @@index([targetType])
+  @@index([brandGroup])
+  @@index([sortOrder])
+  @@map("crawler_targets")
+}
+
+model CrawlerSchedule {
+  id                    String   @id @default("global")
+  enabled               Boolean  @default(true)
+  goldenWindows         String[]
+  thursdayRushHours     String[]
+  nightQuietStart       String   @default("01:00")
+  nightQuietEnd         String   @default("07:30")
+  customIntervalMinutes Int      @default(60)
+  updatedAt             DateTime @updatedAt
+
+  @@map("crawler_schedules")
+}
+
+model BrandGroupConfig {
+  id        String   @id @default(cuid())
+  brandName String   @unique
+  icon      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("brand_group_configs")
+}
+
+model SystemSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("system_settings")
+}
