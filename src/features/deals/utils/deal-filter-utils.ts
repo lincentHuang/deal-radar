@@ -17,18 +17,22 @@ export function filterDealsLocally(deals: SmartDeal[], filters?: Partial<DealFil
       results = results.filter((deal) => {
         // 多關鍵字採用 AND 邏輯：情報需滿足所有搜尋詞
         return terms.every((term) => {
-          return (
-            deal.title.toLowerCase().includes(term) ||
-            (deal.subtitle && deal.subtitle.toLowerCase().includes(term)) ||
-            deal.merchant.name.toLowerCase().includes(term) ||
-            (deal.merchant.storeBranches && deal.merchant.storeBranches.toLowerCase().includes(term)) ||
-            deal.targetItems.some((item) => item.toLowerCase().includes(term)) ||
-            deal.conditions.some((c) => c.toLowerCase().includes(term)) ||
-            deal.tags.some((t) => t.toLowerCase().replace(/^#/, '').includes(term)) ||
-            deal.eligibleCards.some((card) => card.toLowerCase().includes(term)) ||
-            (deal.category && deal.category.toLowerCase().includes(term)) ||
-            deal.regions.some((r) => r.toLowerCase().includes(term))
-          );
+          const syns = [term];
+          if (term === '買一送一') syns.push('買1送1');
+          if (term === '買1送1') syns.push('買一送一');
+
+          return syns.some((syn) => (
+            deal.title.toLowerCase().includes(syn) ||
+            (deal.subtitle && deal.subtitle.toLowerCase().includes(syn)) ||
+            deal.merchant.name.toLowerCase().includes(syn) ||
+            (deal.merchant.storeBranches && deal.merchant.storeBranches.toLowerCase().includes(syn)) ||
+            deal.targetItems.some((item) => item.toLowerCase().includes(syn)) ||
+            deal.conditions.some((c) => c.toLowerCase().includes(syn)) ||
+            deal.tags.some((t) => t.toLowerCase().replace(/^#/, '').includes(syn)) ||
+            deal.eligibleCards.some((card) => card.toLowerCase().includes(syn)) ||
+            (deal.category && deal.category.toLowerCase().includes(syn)) ||
+            deal.regions.some((r) => r.toLowerCase().includes(syn))
+          ));
         });
       });
     }
@@ -101,9 +105,16 @@ export function filterDealsLocally(deals: SmartDeal[], filters?: Partial<DealFil
         ? filters.selectedTag 
         : `#${filters.selectedTag}`;
       const cleanTarget = targetTag.replace(/^#/, '').toLowerCase();
+      const synonyms = [cleanTarget];
+      if (cleanTarget === '買一送一') synonyms.push('買1送1');
+      if (cleanTarget === '買1送1') synonyms.push('買一送一');
+
       results = results.filter((deal) => 
-        deal.tags.some((t) => t.toLowerCase() === targetTag.toLowerCase()) ||
-        deal.title.toLowerCase().includes(cleanTarget)
+        deal.tags.some((t) => {
+          const ct = t.toLowerCase().replace(/^#/, '');
+          return synonyms.includes(ct);
+        }) ||
+        synonyms.some((syn) => deal.title.toLowerCase().includes(syn))
       );
     }
   }

@@ -13,8 +13,8 @@ export const RECOMMENDED_TAG_GROUPS: TagCategoryGroup[] = [
     categoryName: '🔥 熱門促銷形式',
     categoryIcon: 'Sparkles',
     tags: [
-      { name: '#買一送一', description: '買一送一超值好康', dealCount: 42 },
-      { name: '#第二件5折', description: '揪團合購半價', dealCount: 28 },
+      { name: '#買1送1', description: '買1送1超值好康', dealCount: 42 },
+      { name: '#第2件5折', description: '揪團合購半價', dealCount: 28 },
       { name: '#滿千折百', description: '大檔期滿額立折', dealCount: 19 },
       { name: '#即期特惠', description: '惜福惜食出清破盤', dealCount: 15 },
       { name: '#免運', description: '各大電商免運快閃', dealCount: 33 },

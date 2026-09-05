@@ -22,8 +22,11 @@ export function invalidateDealsCache(): void {
   lastCacheTime = 0;
 }
 
-// 將 Prisma Deal 資料模型轉換為前端統一的 SmartDeal 型別契約
+// 將 Prisma Deal 資料模型轉換為前端統一的 SmartDeal 型別契約 (強制執行品牌與標籤正規化防護)
 function mapDbDealToSmartDeal(record: any): SmartDeal {
+  const normMerchant = normalizeBrandName(record.merchantName);
+  const normTags = normalizeTags(record.tags, normMerchant);
+
   return {
     id: record.id,
     title: record.title,
@@ -31,7 +34,7 @@ function mapDbDealToSmartDeal(record: any): SmartDeal {
     category: record.category as any,
     channelType: record.channelType as any,
     merchant: {
-      name: record.merchantName,
+      name: normMerchant,
       logo: record.merchantLogo ?? undefined,
       storeBranches: record.storeBranches ?? undefined,
     },
@@ -42,7 +45,7 @@ function mapDbDealToSmartDeal(record: any): SmartDeal {
     targetItems: record.targetItems ?? [],
     conditions: record.conditions ?? [],
     eligibleCards: record.eligibleCards ?? [],
-    tags: record.tags ?? [],
+    tags: normTags,
     startDate: record.startDate,
     endDate: record.endDate,
     isHot: record.isHot,

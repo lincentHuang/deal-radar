@@ -4,8 +4,12 @@ import { AppLayoutShell } from '@/shared/components/app-layout-shell';
 import { DealDetailModal } from '@/features/deals/components/deal-detail-modal';
 
 export const metadata: Metadata = {
-  title: '特價情報站 | 全通路特價情報聚合平台',
-  description: '結合線上電商破盤比價與線下實體門市特惠，以 Pinterest 簡約泡泡風呈現一眼看懂的 7 大優惠要素。',
+  title: '特物情報局 Dealbureau | 全通路特價情報監聽站',
+  description: '全台特惠，機密解碼！自選情報頻段與分類標籤，即時鎖定四大超商、連鎖超市、手搖咖啡與速食最新特惠情報。',
+  icons: {
+    icon: '/icon.png',
+    apple: '/apple-touch-icon.png',
+  },
 };
 
 export default function RootLayout({

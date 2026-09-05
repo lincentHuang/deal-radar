@@ -68,7 +68,7 @@ export function inferBrandGroup(name: string, url: string = ''): string | undefi
   if (lowerName.includes('家樂福') || lowerName.includes('carrefour') || lowerUrl.includes('carrefour.com.tw')) {
     return '家樂福 Carrefour';
   }
-  if (lowerName.includes('好市多') || lowerName.includes('costco') || lowerUrl.includes('costco.com.tw')) {
+  if (lowerName.includes('好市多') || lowerName.includes('costco') || lowerUrl.includes('costco.com.tw') || lowerUrl.includes('daybuy.tw')) {
     return 'Costco 好市多';
   }
   if (lowerName.includes('大潤發') || lowerName.includes('rt-mart') || lowerUrl.includes('rt-mart.com.tw')) {
@@ -121,7 +121,7 @@ export function getBrandMatchKeywords(name: string, brandGroup?: string | null):
     ['康是美', 'cosmed'],
     ['屈臣氏', 'watsons'],
     ['寶雅', 'poya'],
-    ['好市多', 'costco'],
+    ['好市多', 'costco', 'daybuy'],
     ['爭鮮', 'sushiexpress'],
     ['壽司郎', 'sushiro'],
     ['藏壽司', 'kurasushi'],
@@ -272,6 +272,19 @@ async function ensureSeedCrawlerTargets(): Promise<void> {
           isCustom: t.isCustom ?? false,
         })),
         skipDuplicates: true,
+      });
+    } else {
+      // 自動平滑遷移：若資料庫內的好市多站點仍為舊版 Facebook 網址，自動升級為今購百科專區網址
+      await prisma.crawlerTarget.updateMany({
+        where: {
+          id: 'costco',
+          url: { contains: 'facebook.com' },
+        },
+        data: {
+          name: 'Costco 好市多特價情報 (今購百科)',
+          url: 'https://www.daybuy.tw/costco/promotions/',
+          crawlRule: '今購百科 (Daybuy) Costco 優惠專區目錄深入爬取',
+        },
       });
     }
   } catch (err) {

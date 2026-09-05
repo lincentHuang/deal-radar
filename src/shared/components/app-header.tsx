@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAtom } from 'jotai';
 import { dealFiltersAtom, subscribedTagsAtom } from '@/features/subscriptions/atoms/subscription-atoms';
@@ -49,18 +50,17 @@ export const AppHeader: React.FC = () => {
                 triggerHaptic('light');
               }
             }}
-            className="flex items-center gap-2.5 group select-none flex-shrink-0"
+            className="flex items-center gap-2 group select-none flex-shrink-0"
           >
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-rose-500 via-rose-600 to-orange-400 flex items-center justify-center text-white shadow-md group-hover:scale-105 transition-transform">
-              <Sparkles className="w-5 h-5 animate-pulse" />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-base font-black tracking-tight text-slate-900 group-hover:text-rose-600 transition-colors leading-tight">
-                特價情報站
-              </span>
-              <span className="text-[10px] text-slate-400 font-semibold tracking-wider uppercase hidden sm:inline">
-                Deal Aggregator
-              </span>
+            <div className="relative h-10 w-auto flex items-center group-hover:scale-105 transition-transform duration-200">
+              <Image 
+                src="/brand/logo-transparent.png" 
+                alt="特物情報局 Dealbureau" 
+                width={160} 
+                height={48} 
+                className="h-9 sm:h-10 w-auto object-contain"
+                priority
+              />
             </div>
           </Link>
 
@@ -70,7 +70,7 @@ export const AppHeader: React.FC = () => {
               <Search className="absolute left-3.5 sm:left-4 w-4 h-4 text-slate-400 pointer-events-none transition-colors group-focus-within:text-rose-500" />
               <input
                 type="text"
-                placeholder="搜尋品項、店家、特惠條件 (如: 買一送一、星巴克)..."
+                placeholder="搜尋品項、店家、特惠條件 (如: 買1送1、星巴克)..."
                 value={filters.searchQuery}
                 onChange={handleSearchChange}
                 onKeyDown={(e) => {

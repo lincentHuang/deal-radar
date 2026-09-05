@@ -35,6 +35,8 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useMobileNative } from '@/shared/hooks/use-mobile-native';
+import { getDealPricingDisplay } from '@/features/deals/utils/deal-pricing-utils';
+import { normalizeBrandName, normalizeTags } from '@/features/deals/utils/brand-normalizer';
 
 export const DealDetailModal: React.FC = () => {
   const [activeDeal, setActiveDeal] = useAtom(activeDealDetailAtom);
@@ -64,6 +66,9 @@ export const DealDetailModal: React.FC = () => {
 
   const discountInfo = calculateDiscount(activeDeal.originalPrice, activeDeal.discountPrice);
   const timeInfo = formatRemainingTime(activeDeal.endDate, activeDeal.startDate);
+  const normalizedMerchantName = normalizeBrandName(activeDeal.merchant?.name);
+  const normalizedTags = normalizeTags(activeDeal.tags, normalizedMerchantName);
+  const pricingInfo = getDealPricingDisplay(activeDeal);
 
   const imagesList = activeDeal.images && activeDeal.images.length > 0
     ? activeDeal.images
@@ -216,11 +221,15 @@ export const DealDetailModal: React.FC = () => {
                         <span>限時快閃</span>
                       </span>
                     )}
-                    {discountInfo.percentage > 0 && (
+                    {pricingInfo.badgeText ? (
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-black text-rose-700 bg-white/95 backdrop-blur-md shadow-xs border border-rose-100">
+                        {pricingInfo.badgeText}
+                      </span>
+                    ) : discountInfo.percentage > 0 ? (
                       <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-black text-rose-700 bg-white/95 backdrop-blur-md shadow-xs border border-rose-100">
                         {discountInfo.discountString}
                       </span>
-                    )}
+                    ) : null}
                   </div>
                 </div>
 
@@ -272,47 +281,71 @@ export const DealDetailModal: React.FC = () => {
                 {activeDeal.title}
               </Dialog.Title>
               <Dialog.Description id="dialog-deal-detail-desc" className="text-sm text-slate-600 mb-4">
-                {activeDeal.subtitle || `${activeDeal.merchant.name} · ${activeDeal.regions.join('、')}`}
+                {activeDeal.subtitle || `${normalizedMerchantName} · ${activeDeal.regions.join('、')}`}
               </Dialog.Description>
 
-              {/* 價格大氣泡分析 */}
+              {/* 價格大氣泡分析 (若是買1送1或多件特惠，大字醒目呈現並直觀標註單件推算金額) */}
               <div className="p-4 sm:p-5 bg-gradient-to-r from-rose-50 to-orange-50 rounded-2xl border border-rose-100 mb-6 flex flex-wrap items-center justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-1.5 mb-1">
-                    <span className="text-xs text-rose-500 font-semibold">破盤優惠價</span>
-                    {(() => {
-                      const text = `${activeDeal.title} ${(activeDeal.conditions || []).join(' ')}`;
-                      if (text.includes('買二送二') || text.includes('買2送2')) {
-                        return <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-rose-500 text-white shadow-2xs">買二送二 · 單{activeDeal.priceUnit || '杯'}均價</span>;
-                      }
-                      if (text.includes('買二送一') || text.includes('買2送1')) {
-                        return <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-orange-500 text-white shadow-2xs">買二送一 · 單{activeDeal.priceUnit || '杯'}均價</span>;
-                      }
-                      if (text.includes('買一送一') || text.includes('買1送1')) {
-                        return <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-rose-500 text-white shadow-2xs">買一送一 · 單{activeDeal.priceUnit || '件'}均價</span>;
-                      }
-                      if (text.includes('第2件') || text.includes('第二件')) {
-                        return <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-500 text-white shadow-2xs">第 2 件特惠</span>;
-                      }
-                      return null;
-                    })()}
-                  </div>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-3xl sm:text-4xl font-black text-rose-600">
-                      {activeDeal.discountPrice ? formatPrice(activeDeal.discountPrice) : '促銷特惠'}
+                    <span className="text-xs text-rose-500 font-semibold">
+                      {pricingInfo.isMechanismPromo ? '促銷特惠機制' : '破盤優惠價'}
                     </span>
-                    {activeDeal.priceUnit && (
-                      <span className="text-sm text-slate-500">/ {activeDeal.priceUnit}</span>
+                    {pricingInfo.isMechanismPromo && (
+                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-rose-500 text-white shadow-2xs">
+                        {pricingInfo.displayTitle}
+                      </span>
                     )}
-                    {activeDeal.originalPrice && activeDeal.originalPrice > (activeDeal.discountPrice || 0) && (
-                      <span className="text-base text-slate-400 line-through">
-                        {formatPrice(activeDeal.originalPrice)}
+                  </div>
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    {pricingInfo.isMechanismPromo ? (
+                      <>
+                        <span className="text-3xl sm:text-4xl font-black text-rose-600 bg-gradient-to-r from-rose-600 to-orange-500 bg-clip-text text-transparent">
+                          {pricingInfo.displayTitle}
+                        </span>
+                        {pricingInfo.calculatedUnitPriceText && (
+                          <span className="text-sm sm:text-base font-bold text-rose-700 bg-rose-100/80 border border-rose-200 px-2.5 py-0.5 rounded-xl shadow-2xs">
+                            折算{pricingInfo.calculatedUnitPriceText}
+                          </span>
+                        )}
+                        {pricingInfo.subText && (
+                          <span className="text-base text-slate-400 line-through">
+                            {pricingInfo.subText}
+                          </span>
+                        )}
+                      </>
+                    ) : pricingInfo.discountPrice ? (
+                      <>
+                        <span className="text-3xl sm:text-4xl font-black text-rose-600">
+                          {pricingInfo.displayTitle}
+                        </span>
+                        {pricingInfo.unit && (
+                          <span className="text-sm text-slate-500">/ {pricingInfo.unit}</span>
+                        )}
+                        {pricingInfo.subText && (
+                          <span className="text-base text-slate-400 line-through">
+                            {pricingInfo.subText}
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-2xl sm:text-3xl font-black text-rose-600">
+                        {pricingInfo.displayTitle}
                       </span>
                     )}
                   </div>
                 </div>
 
-                {discountInfo.percentage > 0 && (
+                {pricingInfo.isMechanismPromo && pricingInfo.calculatedUnitPriceText ? (
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-sm font-bold text-white bg-gradient-to-r from-rose-500 to-orange-500 px-3 py-1 rounded-full shadow-xs">
+                      {pricingInfo.displayTitle} 超值回饋
+                    </span>
+                    <span className="text-xs text-rose-700 bg-rose-100/80 px-2.5 py-0.5 rounded-full font-bold">
+                      {pricingInfo.calculatedUnitPriceText}
+                    </span>
+                  </div>
+                ) : discountInfo.percentage > 0 && !pricingInfo.isMechanismPromo ? (
                   <div className="flex flex-col items-end gap-1">
                     <span className="text-sm font-bold text-white bg-gradient-to-r from-rose-500 to-orange-500 px-3 py-1 rounded-full shadow-xs">
                       {discountInfo.discountString} (省 {formatPrice(discountInfo.saved)})
@@ -321,21 +354,21 @@ export const DealDetailModal: React.FC = () => {
                       現折 {discountInfo.percentage}%
                     </span>
                   </div>
-                )}
+                ) : null}
               </div>
 
               {/* 7 大要素詳細區塊 */}
               <div className="space-y-4 mb-6">
 
                 {/* 🏷️ 優惠標籤清單與互動話題專區 */}
-                {activeDeal.tags && activeDeal.tags.length > 0 && (
+                {normalizedTags && normalizedTags.length > 0 && (
                   <div className="p-4 bg-gradient-to-br from-rose-50/50 via-purple-50/30 to-blue-50/30 rounded-2xl border border-rose-100/80">
                     <div className="flex items-center justify-between gap-2 mb-2.5">
                       <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
                         <TagIcon className="w-4 h-4 text-rose-500" />
                         <span>特惠關聯標籤</span>
                         <span className="text-[10px] bg-rose-100 text-rose-700 font-semibold px-2 py-0.5 rounded-full">
-                          {activeDeal.tags.length} 個標籤
+                          {normalizedTags.length} 個標籤
                         </span>
                       </div>
                       <button
@@ -348,7 +381,7 @@ export const DealDetailModal: React.FC = () => {
                     </div>
 
                     <div className="flex flex-wrap gap-2">
-                      {activeDeal.tags.map((tag, idx) => {
+                      {normalizedTags.map((tag, idx) => {
                         const cleanTagName = tag.replace(/^#/, '');
                         const isSubscribed = subscribedTags.includes(tag);
 

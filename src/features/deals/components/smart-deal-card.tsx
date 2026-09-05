@@ -21,6 +21,7 @@ import {
 import { useSetAtom, useAtom } from 'jotai';
 import { activeDealDetailAtom, subscribedTagsAtom } from '@/features/subscriptions/atoms/subscription-atoms';
 import { useMobileNative } from '@/shared/hooks/use-mobile-native';
+import { getDealPricingDisplay } from '@/features/deals/utils/deal-pricing-utils';
 
 interface SmartDealCardProps {
   deal: SmartDeal;
@@ -55,6 +56,7 @@ export const SmartDealCard: React.FC<SmartDealCardProps> = ({ deal, onTagClick, 
 
   const discountInfo = calculateDiscount(deal.originalPrice, deal.discountPrice);
   const timeInfo = formatRemainingTime(deal.endDate, deal.startDate);
+  const pricingInfo = getDealPricingDisplay(deal);
 
   const handleCardClick = () => {
     triggerHaptic('light');
@@ -150,11 +152,15 @@ export const SmartDealCard: React.FC<SmartDealCardProps> = ({ deal, onTagClick, 
               <span>快閃</span>
             </span>
           )}
-          {discountInfo.percentage > 0 && (
+          {pricingInfo.badgeText ? (
+            <span className="inline-flex items-center px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[9px] sm:text-[11px] font-black text-rose-700 bg-white/95 backdrop-blur-md shadow-xs border border-rose-100">
+              {pricingInfo.badgeText}
+            </span>
+          ) : discountInfo.percentage > 0 ? (
             <span className="inline-flex items-center px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[9px] sm:text-[11px] font-black text-rose-700 bg-white/95 backdrop-blur-md shadow-xs border border-rose-100">
               {discountInfo.discountString}
             </span>
-          )}
+          ) : null}
         </div>
 
         {/* 倒數計時小膠囊 */}
@@ -171,22 +177,40 @@ export const SmartDealCard: React.FC<SmartDealCardProps> = ({ deal, onTagClick, 
         {deal.title}
       </h3>
 
-      {/* 💰 核心價格 */}
+      {/* 💰 核心價格 / 促銷機制 (若為買1送1或多件特惠，大字醒目呈現並直觀標註單件推算金額) */}
       <div className="flex items-baseline justify-between gap-1 px-1.5 sm:px-2 mb-1.5 sm:mb-2">
-        <div className="flex items-baseline gap-1 sm:gap-1.5">
-          {deal.discountPrice ? (
+        <div className="flex items-baseline gap-1.5 flex-wrap">
+          {pricingInfo.isMechanismPromo ? (
+            <>
+              <span className="text-base sm:text-2xl font-black text-rose-600 tracking-tight bg-gradient-to-r from-rose-600 to-orange-500 bg-clip-text text-transparent">
+                {pricingInfo.displayTitle}
+              </span>
+              {pricingInfo.calculatedUnitPriceText && (
+                <span className="text-[11px] sm:text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200/80 px-1.5 py-0.5 rounded-md shadow-2xs">
+                  {pricingInfo.calculatedUnitPriceText}
+                </span>
+              )}
+              {pricingInfo.subText && (
+                <span className="text-[10px] sm:text-xs text-slate-400 line-through">
+                  {pricingInfo.subText}
+                </span>
+              )}
+            </>
+          ) : pricingInfo.discountPrice ? (
             <>
               <span className="text-base sm:text-2xl font-black text-rose-600 tracking-tight">
-                {formatPrice(deal.discountPrice)}
+                {pricingInfo.displayTitle}
               </span>
-              {deal.originalPrice && deal.originalPrice > deal.discountPrice && (
+              {pricingInfo.subText && (
                 <span className="text-[10px] sm:text-xs text-slate-400 line-through">
-                  {formatPrice(deal.originalPrice)}
+                  {pricingInfo.subText}
                 </span>
               )}
             </>
           ) : (
-            <span className="text-xs sm:text-base font-bold text-rose-600">促銷特惠</span>
+            <span className="text-xs sm:text-base font-bold text-rose-600">
+              {pricingInfo.displayTitle}
+            </span>
           )}
         </div>
       </div>

@@ -32,6 +32,8 @@ export interface SmartDeal {
   originalPrice?: number;
   discountPrice?: number;
   priceUnit?: string; // e.g. "元 / 杯", "元 / 盒"
+  pricingType?: 'fixed_price' | 'buy_x_get_y' | 'percentage_discount' | 'special_offer';
+  promoDisplayBadge?: string; // e.g. "買1送1", "全館9折", "任2瓶96元"
   
   // 7大要素之特惠條件與品項
   targetItems: string[]; // e.g. ["特大杯風味那堤", "特大杯美式"]
@@ -49,7 +51,7 @@ export interface SmartDeal {
   
   // 數據與社群情報
   source: 'affiliate' | 'social_listening' | 'merchant_post' | 'official' | 'blog_curation';
-  sourcePlatform?: 'Dcard' | 'Momo' | 'Shopee' | 'PChome' | 'Costco' | 'Carrefour' | 'PXMart' | 'Convenience' | 'Merchant' | 'Supertaste' | 'Media';
+  sourcePlatform?: 'Dcard' | 'Momo' | 'Shopee' | 'PChome' | 'Costco' | 'Carrefour' | 'PXMart' | 'Convenience' | 'Merchant' | 'Supertaste' | 'Media' | 'Daybuy';
   sourceUrl?: string;
   likeCount: number;
   commentCount: number;

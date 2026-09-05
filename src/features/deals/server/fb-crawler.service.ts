@@ -69,8 +69,8 @@ export const CRAWL_TARGETS: CrawlTarget[] = [
   },
   {
     id: 'costco',
-    name: 'Costco 好市多特價情報',
-    url: 'https://www.facebook.com/DAYBUY.TW',
+    name: 'Costco 好市多特價情報 (今購百科)',
+    url: 'https://www.daybuy.tw/costco/promotions/',
     logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/Costco_Wholesale_logo_2010-10-26.svg/1200px-Costco_Wholesale_logo_2010-10-26.svg.png',
     defaultCategory: 'grocery',
   },
@@ -466,6 +466,15 @@ export async function crawlLiveTargets(targetsToCrawl?: CrawlTarget[]): Promise<
     for (const target of targets) {
       try {
         console.log(`[Live-Crawler] Scraping live target: ${target.name} (${target.url})...`);
+
+        // Case 0: 今購百科 Costco 優惠專區
+        if (target.url.includes('daybuy.tw') || target.id === 'costco') {
+          console.log(`[Live-Crawler] 🛒 識別為今購百科 Costco 專區，轉交專屬爬蟲服務...`);
+          const { crawlDaybuyCostcoDeals } = await import('./daybuy-crawler.service');
+          const daybuyDeals = await crawlDaybuyCostcoDeals(3);
+          extractedDeals.push(...daybuyDeals);
+          continue;
+        }
 
         // Case 1: Facebook 官方粉絲專頁
         if (target.url.includes('facebook.com')) {

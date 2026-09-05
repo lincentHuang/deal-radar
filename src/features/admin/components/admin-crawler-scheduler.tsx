@@ -453,6 +453,9 @@ export const AdminCrawlerScheduler: React.FC<AdminCrawlerSchedulerProps> = ({
     if (res.success) {
       setTargets((prev) => prev.filter((t) => t.id !== targetId));
       setSelectedTargetIds((prev) => prev.filter((id) => id !== targetId));
+      if (editingTarget?.id === targetId) {
+        setEditingTarget(null);
+      }
       showFeedback(`已成功刪除站點【${name}】`);
       onRefresh?.();
     } else {
@@ -1406,8 +1409,9 @@ export const AdminCrawlerScheduler: React.FC<AdminCrawlerSchedulerProps> = ({
                       onDragLeave={handleDragLeave}
                       onDrop={(e) => handleDrop(e, target.id)}
                       onDragEnd={handleDragEnd}
-                      className={`bg-white rounded-2xl border border-slate-200/80 shadow-xs p-3.5 sm:p-4.5 flex items-center justify-between gap-3 transition-all ${
-                        isSelected ? 'bg-rose-50/40' : 'hover:bg-slate-50/70'
+                      onClick={() => handleOpenEditModal(target)}
+                      className={`bg-white rounded-2xl border border-slate-200/80 shadow-xs p-3.5 sm:p-4.5 flex items-center justify-between gap-3 transition-all cursor-pointer group hover:border-indigo-300 hover:shadow-sm ${
+                        isSelected ? 'bg-rose-50/40 border-rose-200' : 'hover:bg-slate-50/70'
                       } ${isDraggingThis ? 'opacity-40 scale-[0.99] border-dashed border-2 border-indigo-400' : ''} ${
                         isDragOverThis ? 'border-t-4 border-t-indigo-600 bg-indigo-50/40' : ''
                       }`}
@@ -1415,6 +1419,7 @@ export const AdminCrawlerScheduler: React.FC<AdminCrawlerSchedulerProps> = ({
                       <div className="flex items-center gap-3 min-w-0">
                         {/* 六點拖曳把手 */}
                         <div
+                          onClick={(e) => e.stopPropagation()}
                           className={`p-1 text-slate-300 hover:text-slate-700 transition-colors flex-shrink-0 ${
                             sortBy === 'custom' ? 'cursor-grab active:cursor-grabbing' : 'cursor-not-allowed opacity-30'
                           }`}
@@ -1426,7 +1431,10 @@ export const AdminCrawlerScheduler: React.FC<AdminCrawlerSchedulerProps> = ({
                         {/* 勾選框 */}
                         <button
                           type="button"
-                          onClick={() => handleToggleSelectOne(target.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleSelectOne(target.id);
+                          }}
                           className="text-slate-400 hover:text-slate-700 cursor-pointer flex-shrink-0"
                         >
                           {isSelected ? (
@@ -1457,7 +1465,7 @@ export const AdminCrawlerScheduler: React.FC<AdminCrawlerSchedulerProps> = ({
                         {/* 資訊主體 */}
                         <div className="flex flex-col min-w-0">
                           <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="font-black text-slate-900 text-xs sm:text-sm truncate">
+                            <span className="font-black text-slate-900 text-xs sm:text-sm truncate group-hover:text-indigo-600 transition-colors">
                               {target.name}
                             </span>
 
@@ -1513,7 +1521,7 @@ export const AdminCrawlerScheduler: React.FC<AdminCrawlerSchedulerProps> = ({
                             ) : (
                               <span 
                                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[10px] font-bold border border-slate-200 cursor-default"
-                                title="尚未取得任何特惠情報，可點擊右側「抓取」按鈕進行測試"
+                                title="尚未取得任何特惠情報，點擊進入可立即採集測試"
                               >
                                 <span>⚪ 尚無情報 (0 筆)</span>
                               </span>
@@ -1532,6 +1540,7 @@ export const AdminCrawlerScheduler: React.FC<AdminCrawlerSchedulerProps> = ({
                               href={target.url} 
                               target="_blank" 
                               rel="noopener noreferrer" 
+                              onClick={(e) => e.stopPropagation()}
                               className="truncate max-w-[180px] sm:max-w-[240px] text-slate-400 hover:text-rose-600 flex items-center gap-0.5"
                             >
                               <span>{target.url}</span>
@@ -1541,52 +1550,12 @@ export const AdminCrawlerScheduler: React.FC<AdminCrawlerSchedulerProps> = ({
                         </div>
                       </div>
 
-                      {/* 右側按鈕操作區 */}
-                      <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => handleOpenEditModal(target)}
-                          className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
-                          title="詳細編輯站點基本資料與排程"
-                        >
-                          <Settings2 className="w-3.5 h-3.5 text-indigo-600" />
-                          <span className="hidden sm:inline">編輯</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          disabled={isRunning || !target.enabled}
-                          onClick={() => handleTriggerCrawl(target.id)}
-                          className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all disabled:opacity-40 cursor-pointer flex items-center gap-1"
-                          title="立即手動抓取此站點"
-                        >
-                          {isRunning && runningTargetId === target.id ? (
-                            <RefreshCw className="w-3.5 h-3.5 animate-spin text-rose-600" />
-                          ) : (
-                            <Play className="w-3.5 h-3.5 text-slate-600" />
-                          )}
-                          <span className="hidden sm:inline">抓取</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleToggleTarget(target.id, target.enabled)}
-                          className={`w-11 h-6 rounded-full p-0.5 transition-colors duration-200 ease-in-out cursor-pointer flex items-center ${
-                            target.enabled ? 'bg-emerald-500 justify-end' : 'bg-slate-200 justify-start'
-                          }`}
-                          title={target.enabled ? '點擊暫停監控' : '點擊啟動監控'}
-                        >
-                          <div className="w-5 h-5 rounded-full bg-white shadow-md" />
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteTarget(target.id, target.name)}
-                          className="p-1.5 rounded-xl hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
-                          title="刪除此爬蟲站點"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                      {/* 右側：點擊進入管理中樞指示 */}
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 group-hover:text-indigo-600 transition-colors flex-shrink-0">
+                        <span className="hidden sm:inline text-[11px] bg-slate-100 group-hover:bg-indigo-50 group-hover:text-indigo-600 px-2.5 py-1 rounded-xl transition-all font-bold">
+                          管理 / 採集
+                        </span>
+                        <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all" />
                       </div>
                     </div>
                   );
@@ -1792,7 +1761,8 @@ export const AdminCrawlerScheduler: React.FC<AdminCrawlerSchedulerProps> = ({
                               onDragLeave={handleDragLeave}
                               onDrop={(e) => handleDrop(e, target.id)}
                               onDragEnd={handleDragEnd}
-                              className={`p-3 sm:p-3.5 pl-6 sm:pl-8 flex items-center justify-between gap-3 transition-all ${
+                              onClick={() => handleOpenEditModal(target)}
+                              className={`p-3 sm:p-3.5 pl-6 sm:pl-8 flex items-center justify-between gap-3 transition-all cursor-pointer group hover:bg-indigo-50/40 ${
                                 isSelected ? 'bg-rose-50/40' : 'hover:bg-slate-50/60'
                               } ${isDraggingThis ? 'opacity-40 scale-[0.99] border-dashed border-2 border-indigo-400' : ''} ${
                                 isDragOverThis ? 'border-t-4 border-t-indigo-600 bg-indigo-50/40' : ''
@@ -1801,6 +1771,7 @@ export const AdminCrawlerScheduler: React.FC<AdminCrawlerSchedulerProps> = ({
                               <div className="flex items-center gap-3 min-w-0">
                                 {/* 拖曳把手 */}
                                 <div
+                                  onClick={(e) => e.stopPropagation()}
                                   className={`p-1 text-slate-300 hover:text-slate-700 transition-colors flex-shrink-0 ${
                                     sortBy === 'custom' ? 'cursor-grab active:cursor-grabbing' : 'cursor-not-allowed opacity-30'
                                   }`}
@@ -1812,7 +1783,10 @@ export const AdminCrawlerScheduler: React.FC<AdminCrawlerSchedulerProps> = ({
                                 {/* 勾選框 */}
                                 <button
                                   type="button"
-                                  onClick={() => handleToggleSelectOne(target.id)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleToggleSelectOne(target.id);
+                                  }}
                                   className="text-slate-400 hover:text-slate-700 cursor-pointer flex-shrink-0"
                                 >
                                   {isSelected ? (
@@ -1864,7 +1838,7 @@ export const AdminCrawlerScheduler: React.FC<AdminCrawlerSchedulerProps> = ({
 
                                 <div className="flex flex-col min-w-0">
                                   <div className="flex items-center gap-2">
-                                    <span className="font-bold text-slate-900 text-xs sm:text-sm truncate">
+                                    <span className="font-bold text-slate-900 text-xs sm:text-sm truncate group-hover:text-indigo-600 transition-colors">
                                       {target.name}
                                     </span>
                                     <span className={`px-2 py-0.2 rounded-full text-[9px] font-extrabold ${
@@ -1889,7 +1863,7 @@ export const AdminCrawlerScheduler: React.FC<AdminCrawlerSchedulerProps> = ({
                                     ) : (
                                       <span 
                                         className="inline-flex items-center gap-1 px-2 py-0.2 rounded-full bg-slate-100 text-slate-500 text-[9px] font-bold border border-slate-200 cursor-default flex-shrink-0"
-                                        title="此管道尚未取得情報"
+                                        title="此管道尚未取得情報，點擊進入可立即採集測試"
                                       >
                                         <span>⚪ 0 筆</span>
                                       </span>
@@ -1907,6 +1881,7 @@ export const AdminCrawlerScheduler: React.FC<AdminCrawlerSchedulerProps> = ({
                                       href={target.url} 
                                       target="_blank" 
                                       rel="noopener noreferrer" 
+                                      onClick={(e) => e.stopPropagation()}
                                       className="truncate max-w-[200px] sm:max-w-[280px] text-slate-400 hover:text-rose-600 flex items-center gap-0.5"
                                     >
                                       <span>{target.url}</span>
@@ -1916,52 +1891,12 @@ export const AdminCrawlerScheduler: React.FC<AdminCrawlerSchedulerProps> = ({
                                 </div>
                               </div>
 
-                              {/* 操作按鈕 */}
-                              <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenEditModal(target)}
-                                  className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
-                                  title="詳細編輯"
-                                >
-                                  <Settings2 className="w-3.5 h-3.5 text-indigo-600" />
-                                  <span className="hidden sm:inline">編輯</span>
-                                </button>
-
-                                <button
-                                  type="button"
-                                  disabled={isRunning || !target.enabled}
-                                  onClick={() => handleTriggerCrawl(target.id)}
-                                  className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all disabled:opacity-40 cursor-pointer flex items-center gap-1"
-                                  title="立即抓取此來源"
-                                >
-                                  {isRunning && runningTargetId === target.id ? (
-                                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-rose-600" />
-                                  ) : (
-                                    <Play className="w-3.5 h-3.5 text-slate-600" />
-                                  )}
-                                  <span className="hidden sm:inline">抓取</span>
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => handleToggleTarget(target.id, target.enabled)}
-                                  className={`w-10 h-5.5 rounded-full p-0.5 transition-colors duration-200 ease-in-out cursor-pointer flex items-center ${
-                                    target.enabled ? 'bg-emerald-500 justify-end' : 'bg-slate-200 justify-start'
-                                  }`}
-                                  title={target.enabled ? '點擊暫停' : '點擊啟用'}
-                                >
-                                  <div className="w-4.5 h-4.5 rounded-full bg-white shadow-md" />
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteTarget(target.id, target.name)}
-                                  className="p-1 rounded-xl hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
-                                  title="刪除此站點"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                              {/* 右側：點擊進入管理中樞指示 */}
+                              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 group-hover:text-indigo-600 transition-colors flex-shrink-0">
+                                <span className="hidden sm:inline text-[11px] bg-slate-100 group-hover:bg-indigo-50 group-hover:text-indigo-600 px-2.5 py-1 rounded-xl transition-all font-bold">
+                                  管理 / 採集
+                                </span>
+                                <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all" />
                               </div>
                             </div>
                           );
@@ -2232,30 +2167,63 @@ export const AdminCrawlerScheduler: React.FC<AdminCrawlerSchedulerProps> = ({
       {editingTarget && (
         <div className="fixed inset-0 !m-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
           <div className="w-full max-w-2xl bg-white rounded-3xl p-6 sm:p-7 shadow-2xl border border-slate-200 text-slate-900 max-h-[90vh] flex flex-col">
-            {/* 標題欄 */}
-            <div className="flex items-start justify-between pb-4 border-b border-slate-100 mb-4 flex-shrink-0">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="p-2 rounded-xl bg-indigo-50 text-indigo-600">
-                    <Settings2 className="w-5 h-5" />
-                  </span>
-                  <div>
-                    <h3 className="text-base sm:text-lg font-black text-slate-900">
-                      編輯【{editingTarget.name}】站點設定與爬蟲邏輯
+            {/* 標題欄與即時快捷操作區 */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 mb-4 flex-shrink-0 gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="p-2 rounded-xl bg-indigo-50 text-indigo-600 flex-shrink-0">
+                  <Settings2 className="w-5 h-5" />
+                </span>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base sm:text-lg font-black text-slate-900 truncate">
+                      【{editingTarget.name}】站點管理中樞
                     </h3>
-                    <p className="text-xs text-slate-500">
-                      自訂來源屬性、自動排程巡檢時段與 Gemini AI 萃取引導規則
-                    </p>
                   </div>
+                  <p className="text-xs text-slate-500 truncate">
+                    自訂屬性、排程時段、AI 萃取邏輯與即時採集
+                  </p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setEditingTarget(null)}
-                className="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
+
+              {/* 頂部快捷操作按鈕：即時採集 + 監控狀態切換 + 關閉 */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button
+                  type="button"
+                  disabled={isRunning}
+                  onClick={() => handleTriggerCrawl(editingTarget.id)}
+                  className="px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-40 shadow-xs active:scale-95"
+                  title="立即啟動爬蟲採集並透過 Gemini AI 解析情報"
+                >
+                  {isRunning && runningTargetId === editingTarget.id ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-rose-600" />
+                  ) : (
+                    <Play className="w-3.5 h-3.5 text-rose-600" />
+                  )}
+                  <span>{isRunning && runningTargetId === editingTarget.id ? '採集中...' : '立即採集抓取'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setEditingTarget({ ...editingTarget, enabled: !editingTarget.enabled })}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 border ${
+                    editingTarget.enabled
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                      : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
+                  }`}
+                  title={editingTarget.enabled ? '點擊暫停監控' : '點擊啟用監控'}
+                >
+                  <div className={`w-2 h-2 rounded-full ${editingTarget.enabled ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+                  <span>{editingTarget.enabled ? '監控中' : '已暫停'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setEditingTarget(null)}
+                  className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* 三頁籤導覽列 (Tabs Header) */}

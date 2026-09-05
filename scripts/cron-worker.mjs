@@ -27,7 +27,7 @@ const ACTIVE_TARGETS = [
   { id: 'familymart', name: 'FamilyMart 全家', url: 'https://www.facebook.com/FamilyMart' },
   { id: 'pxmart', name: '全聯福利中心', url: 'https://www.facebook.com/pxmartchannel' },
   { id: 'carrefour', name: '家樂福 Carrefour', url: 'https://www.facebook.com/carrefour.tw' },
-  { id: 'costco', name: 'Costco 好市多特價情報', url: 'https://www.facebook.com/DAYBUY.TW' },
+  { id: 'costco', name: 'Costco 好市多特價情報 (今購百科)', url: 'https://www.daybuy.tw/costco/promotions/' },
   { id: 'rtmart', name: '大潤發 RT-MART', url: 'https://www.facebook.com/rtmart.tw' },
   { id: 'hilife', name: '萊爾富 Hi-Life', url: 'https://www.facebook.com/hihilife' },
   { id: 'okmart', name: 'OK超商 OKmart', url: 'https://www.facebook.com/okmart.tw' },

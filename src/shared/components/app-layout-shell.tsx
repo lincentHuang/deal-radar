@@ -47,10 +47,10 @@ export const AppLayoutShell: React.FC<AppLayoutShellProps> = ({ children }) => {
       <footer className="w-full bg-white border-t border-slate-100 py-8 text-center text-xs text-slate-400 mt-auto">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <span className="font-bold text-slate-700">🛒 全通路特價情報聚合平台</span>
-            <span>· Pinterest 簡約泡泡風</span>
+            <span className="font-bold text-slate-700">🕵️ 特物情報局 Dealbureau</span>
+            <span>· 全通路特價情報監聽站</span>
           </div>
-          <p>© 2026 特價情報站 (Deal Aggregator Platform). 契約先行 ➔ 垂直領域切片 ➔ UI 五態閉環.</p>
+          <p>© 2026 特物情報局 (Dealbureau). 契約先行 ➔ 垂直領域切片 ➔ UI 五態閉環.</p>
         </div>
       </footer>
     </>

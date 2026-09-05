@@ -155,31 +155,34 @@ export async function parseDealsWithGemini(post: RawCrawledPost): Promise<SmartD
    - 【個別獨立匡線】：每個獨立隔開的方格都是一組獨立促銷（如「第二件10元」、「加10元多1件」、「2杯65元」、「2串139元」等）。
 2. 【圖中有價目表/DM】：貼文文案可能很簡短，但其中一張附圖是「商品價目表/DM/條碼圖卡」（標示了所有商品名稱與特惠價）。
 3. 【全品項完整拆解（不得遺漏）】：海報中若有 16 個特價商品品項，請逐一拆解出完整的優惠項目清單。
-4. 【🔥 標題命名規範（極重要）】：
-   標題必須完整包含「品牌 + 商品名 + (規格) + 核心特惠機制」，例如：
-   - 黑松沙士 清新紅柚風味 買1送1
-   - 百吉 布丁大雪糕 買1送1
-   - 阿奇儂 極濃義式開心果雪糕 買1送1
-   - 農心 辛拉麵袋麵 買1送1
-   - 金萱二十七 買2送2
-   - Alfie 草莓牛奶風味可可 / 原味可可 任選買1送1
-   - 特趣 焦糖餅乾巧克力 / 鹹焦糖 任選買1送1
-   - 義美 仙草奶凍雪糕 加10元多1件
-   - 日清奶油三明治 第二件10元
-   - -196 強烈雙重檸檬 / 葡萄柚 任選3件155元
-   - Let's Café 特大杯美式/拿鐵、中單品 任選2杯95元
-   - Let's Tea 大杯仙女醇奶茶(冰/熱) 2杯65元
-   - Fami!ce 霜淇淋(不限口味) 2支55元
-   - 酷繽沙 65元系列酷繽沙 任選2杯75元
-   - 五月花 厚棒衛生紙 60抽x6包 2串139元
-   - 德國原裝進口 黑麥汁原味 買1送1
-5. 【🔥 破盤優惠價折算單入均價（極重要）】：
-   - 若為「買1送1」（原價 35），折算後單件均價 discountPrice 應為 18，originalPrice 為 35，priceUnit 為「件/支/瓶」。
-   - 若為「買2送2」（原價 30），折算後單件均價 discountPrice 應為 15，originalPrice 為 30，priceUnit 為「瓶」。
-   - 若為「加10元多1件」（原價 45），折算後單件均價 discountPrice 應為 28 (55/2)，originalPrice 為 45，priceUnit 為「支」。
-   - 若為「任選3件155元」（原價 79），折算後單件均價 discountPrice 應為 52 (155/3)，originalPrice 為 79，priceUnit 為「罐」。
-   - 若為「2杯65元」（原價 55），折算後單杯均價 discountPrice 應為 33，originalPrice 為 55，priceUnit 為「杯」。
-   - 若為「2串139元」（原價 259），折算後單串均價 discountPrice 應為 70，originalPrice 為 259，priceUnit 為「串」。
+4. 【🔥 標題命名規範（極重要，嚴禁以粉專名稱為題）】：
+   - ⚠️【嚴禁使用粉專名稱或社群帳號當作品項或標題】：絕對不要將 title 或 targetItems 設為「全家 FamilyMart 官方粉專」、「全家FamilyMart」、「Costco 好市多特價情報」等粉專名稱！
+   - 標題必須完整包含「品牌 + 具體商品名 + (規格) + 核心特惠機制」，例如：
+     - 全家 Fami!ce 木瓜牛奶霜淇淋 2支55元
+     - 全家 黑松沙士 清新紅柚風味 買1送1
+     - 百吉 布丁大雪糕 買1送1
+     - 阿奇儂 極濃義式開心果雪糕 買1送1
+     - 農心 辛拉麵袋麵 買1送1
+     - 金萱二十七 買2送2
+     - Alfie 草莓牛奶風味可可 / 原味可可 任選買1送1
+     - 特趣 焦糖餅乾巧克力 / 鹹焦糖 任選買1送1
+     - 義美 仙草奶凍雪糕 加10元多1件
+     - 日清奶油三明治 第二件10元
+     - -196 強烈雙重檸檬 / 葡萄柚 任選3件155元
+     - Let's Café 特大杯美式/拿鐵、中單品 任選2杯95元
+     - Let's Tea 大杯仙女醇奶茶(冰/熱) 2杯65元
+     - Fami!ce 霜淇淋(不限口味) 2支55元
+     - 酷繽沙 65元系列酷繽沙 任選2杯75元
+     - 五月花 厚棒衛生紙 60抽x6包 2串139元
+     - 德國原裝進口 黑麥汁原味 買1送1
+5. 【🔥 核心特惠機制與破盤價格提取（極重要）】：
+   - 【特惠機制短語 promoDisplayBadge】：請精準提煉出最直覺醒目的優惠文字（數字統一為阿拉伯數字），例如：「買1送1」、「買2送1」、「買2送2」、「全館9折」、「第2件5折」、「第2件半價」、「任2瓶96元」、「2入59元」、「2支55元」、「加10元多1件」。
+   - 若促銷機制為「買一送一」或「買多送多」，pricingType 填寫 "buy_x_get_y"，promoDisplayBadge 統一填寫 "買1送1"（不可寫成中文「買一送一」）；
+   - 若促銷機制為「全館折數」，pricingType 填寫 "percentage_discount"，promoDisplayBadge 填寫 "全館9折"；
+   - 若為固定特惠價格（如林鳳營鮮乳特價159元），pricingType 填寫 "fixed_price"，discountPrice 填 159，originalPrice 填 194；
+   - 若為「買1送1」（原價 35），折算後單件均價 discountPrice 應為 18，originalPrice 為 35，priceUnit 為「件/支/瓶」；
+   - 若為「2支55元」（原價 49），折算後單件均價 discountPrice 應為 28，originalPrice 為 49，priceUnit 為「支」。
+   - 【targetItems 必須為具體商品品項】：例如 ["Fami!ce 霜淇淋 (木瓜牛奶)", "Fami!ce 霜淇淋 (不限口味)"]，絕對不可填入粉專名稱或店家品牌名！
 6. 【🔥 活動起訖日期 OCR 精準解析（極重要）】：
    - 例如《活動日期：115.08.28 - 09.01》➔ 115年為民國年 (2026年)，轉換為 startDate: "2026-08-28", endDate: "2026-09-01"。
 7. 【🔥 原圖高清展示，排除記者/廣告頭像】：
@@ -187,11 +190,11 @@ export async function parseDealsWithGemini(post: RawCrawledPost): Promise<SmartD
    - ⚠️ 絕對不要選擇任何作者肖像、廣告橫幅 (Ad Banner) 或無關圖示！
 8. 【🔥 標籤收斂與純淨化】：
    請嚴格依照【5層精準標籤體系】提煉 4~6 個標籤，嚴禁包含人名、記者姓名或廣告導流：
-   ① 通路品牌：#全家、#7-ELEVEN、#康康5
+   ① 通路品牌：#全家、#7-11、#美廉社、#萬家福
    ② 核心大品類：#咖啡、#鮮食、#冰品、#飲品、#泡麵、#生活用品
-   ③ 具體細品項：#霜淇淋、#奶茶、#雪糕、#衛生紙、#巧克力、#調酒
+   ③ 具體細品項：#霜淇淋、#奶茶、#雪糕、#衛生紙、#巧克力、#鮮乳
    ④ 規格/風味：#大杯、#清新紅柚、#開心果、#厚棒
-   ⑤ 促銷機制：#買一送一、#買2送2、#加10元多1件、#第二件10元、#任選優惠
+   ⑤ 促銷機制：#買1送1、#買2送2、#加10元多1件、#第二件10元、#任選優惠
 9. 【🎥 影片截圖多模態識別（極重要）】：
    - 當附圖為「影片畫面截圖 (Video Frame / Reel)」或影片封面時，促銷文字常出現在畫面正中央、底部字幕或品牌促銷字卡橫幅中，請精準辨識並提取。
    - 若附圖為影片截圖或文章為影片形式，請務必在 tags 中加入 "#影片情報"。
@@ -204,12 +207,14 @@ export async function parseDealsWithGemini(post: RawCrawledPost): Promise<SmartD
       "title": "全家 黑松沙士 清新紅柚風味 買1送1",
       "subtitle": "清新紅柚風味沙士，限時同商品買1送1",
       "category": "food",
+      "promoDisplayBadge": "買1送1",
+      "pricingType": "buy_x_get_y",
       "discountPrice": 18,
       "originalPrice": 35,
       "priceUnit": "瓶",
       "targetItems": ["黑松沙士 清新紅柚風味"],
       "conditions": ["同商品買1送1"],
-      "tags": ["#全家", "#康康5", "#飲品", "#黑松沙士", "#買一送一"],
+      "tags": ["#全家", "#康康5", "#飲品", "#黑松沙士", "#買1送1"],
       "startDate": "2026-08-28",
       "endDate": "2026-09-01",
       "matchedImageIndex": 0,
@@ -229,7 +234,7 @@ ${post.text || '（無貼文文字，請重點識別圖片中的商品與價目�
 
     const userParts: any[] = [{ text: `${systemPrompt}\n\n${contentPrompt}` }, ...imageParts];
 
-    const modelsToTry = ['gemini-3.5-flash-lite', 'gemini-3.7-flash', 'gemini-3.6-flash'];
+    const modelsToTry = ['gemini-3.6-flash', 'gemini-2.0-flash', 'gemini-3.7-flash'];
     let responseText = '';
 
     for (const modelName of modelsToTry) {
@@ -296,6 +301,8 @@ ${post.text || '（無貼文文字，請重點識別圖片中的商品與價目�
         discountPrice: Number(d.discountPrice) || 49,
         originalPrice: Number(d.originalPrice) || Math.round((Number(d.discountPrice) || 49) * 1.35),
         priceUnit: d.priceUnit || '份',
+        promoDisplayBadge: d.promoDisplayBadge || undefined,
+        pricingType: d.pricingType || undefined,
         targetItems: Array.isArray(d.targetItems) && d.targetItems.length > 0 ? d.targetItems : [d.title],
         conditions: Array.isArray(d.conditions) && d.conditions.length > 0 ? d.conditions : ['門市促銷優惠'],
         eligibleCards:
@@ -331,7 +338,7 @@ ${post.text || '（無貼文文字，請重點識別圖片中的商品與價目�
         images: selectedImage ? [selectedImage] : undefined,
         aspectRatio: undefined,
       };
-    });
+    }).filter(isValidQualityDeal);
 
     console.log(`[Gemini Vision] Successfully extracted ${generatedDeals.length} distinct deals from post (${post.merchantName})`);
     return generatedDeals;
@@ -339,6 +346,37 @@ ${post.text || '（無貼文文字，請重點識別圖片中的商品與價目�
     console.error('[Gemini Vision] Error:', (err as Error).message);
     return fallbackHeuristicMultiParser(post);
   }
+}
+
+/**
+ * 防幻覺與品質守門員：檢核情報是否具備清晰實體、明確活動/新品機制，且來源網址非純首頁
+ */
+export function isValidQualityDeal(deal: SmartDeal): boolean {
+  if (!deal.title || deal.title.trim().length < 3) return false;
+
+  // 1. 排除爬蟲雜訊、非商品描述與文章裝潢分區標題
+  const lowerTitle = deal.title.toLowerCase();
+  const blockedKeywords = [
+    '官方粉專', '生活專區', '新品優惠最速報', '私人招待所風格',
+    '【優惠看這裡】', '菜單、價位一覽', '主打麻辣湯可以喝', '首推必點手搗肉滑'
+  ];
+  if (blockedKeywords.some(kw => lowerTitle.includes(kw)) || deal.title.trim().endsWith('和')) {
+    return false;
+  }
+
+  // 2. 嚴格禁止純首頁或無特定活動貼文/報導網址 (避免點擊來源沒有相關東西)
+  if (deal.sourceUrl) {
+    const u = deal.sourceUrl.trim();
+    if (u.endsWith('.tw') || u.endsWith('.tw/') || u.match(/^https?:\/\/(www\.)?facebook\.com\/[^\/]+\/?$/i)) {
+      return false;
+    }
+  }
+
+  // 3. 必須具備數值折價、多元促銷機制（買1送1、加價購、滿額贈等）或明確新品上市情報
+  if (deal.discountPrice && deal.discountPrice > 0) return true;
+  const combined = `${deal.title} ${deal.subtitle || ''} ${(deal.tags || []).join(' ')} ${(deal.conditions || []).join(' ')}`;
+  const promoOrNewRegex = /(買[一1二2三3\d]+送[一1二2三3\d]+|第[二2]件|半價|加價購|滿額贈|免費送|換購|吃到飽|新品|限定|登場|上市|聯名|預購|特惠|折扣)/i;
+  return promoOrNewRegex.test(combined);
 }
 
 /**
@@ -359,8 +397,8 @@ function fallbackHeuristicMultiParser(post: RawCrawledPost): SmartDeal[] {
     const originalPrice = originalMatch ? parseInt(originalMatch[1], 10) : Math.round(discountPrice * 1.35);
 
     const conditions: string[] = [];
-    if (sec.includes('買一送一') || sec.includes('買1送1')) conditions.push('買一送一');
-    if (sec.includes('第二件') || sec.includes('第2件')) conditions.push('第二件優惠');
+    if (sec.includes('買一送一') || sec.includes('買1送1')) conditions.push('買1送1');
+    if (sec.includes('第二件') || sec.includes('第2件')) conditions.push('第2件優惠');
     if (sec.includes('行動隨時取')) conditions.push('行動隨時取');
     if (sec.includes('會員') || sec.includes('OPENPOINT')) conditions.push('會員專屬');
     if (conditions.length === 0) conditions.push('門市促銷優惠');
@@ -368,10 +406,15 @@ function fallbackHeuristicMultiParser(post: RawCrawledPost): SmartDeal[] {
     const lines = sec
       .split('\n')
       .map((s) => s.replace(/^[·•\s\-_]+|[·•\s\-_]+$/g, '').trim())
-      .filter((s) => s && !s.includes('小時') && !s.includes('天') && s !== post.merchantName);
+      .filter((s) => s && !s.includes('小時') && !s.includes('天') && !s.includes('昨天') && !s.includes('剛剛') && s !== post.merchantName && !s.includes('官方粉專'));
 
-    let title = lines[0] || `${post.merchantName} 優惠活動`;
-    title = title.replace(/^#\S+\s*/, '').replace(/\\+/g, '').trim().slice(0, 45);
+    const bracketLine = lines.find((l) => l.includes('【') || l.includes('】'));
+    const promoLine = lines.find((l) => /(買|送|特價|優惠|折|\$|NT|\d+元)/i.test(l));
+    let rawTitle = bracketLine ? bracketLine.replace(/[【】]/g, '').trim() : (promoLine || lines[0] || `${post.merchantName} 優惠活動`);
+    rawTitle = rawTitle.replace(/^#\S+\s*/, '').replace(/\\+/g, '').trim().slice(0, 45);
+
+    const normalizedMerchantName = normalizeBrandName(post.merchantName);
+    const title = rawTitle.startsWith(normalizedMerchantName) ? rawTitle : `${normalizedMerchantName} ${rawTitle}`;
 
     let selectedImage = post.images[0] || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=800';
     if (post.images.length > 1 && post.images[idx + 1]) {
@@ -381,8 +424,6 @@ function fallbackHeuristicMultiParser(post: RawCrawledPost): SmartDeal[] {
     const now = new Date();
     const nextWeek = new Date();
     nextWeek.setDate(now.getDate() + 7);
-
-    const normalizedMerchantName = normalizeBrandName(post.merchantName);
 
     items.push({
       id: `crawled-${post.merchantId}-${Date.now().toString(36)}-${idx}`,
@@ -399,7 +440,8 @@ function fallbackHeuristicMultiParser(post: RawCrawledPost): SmartDeal[] {
       discountPrice,
       originalPrice,
       priceUnit: '份',
-      targetItems: [title],
+      promoDisplayBadge: conditions[0] || '門市特惠',
+      targetItems: [rawTitle],
       conditions,
       eligibleCards:
         post.merchantId === '7eleven'
@@ -415,7 +457,7 @@ function fallbackHeuristicMultiParser(post: RawCrawledPost): SmartDeal[] {
       startDate: now.toISOString().split('T')[0],
       endDate: nextWeek.toISOString().split('T')[0],
       isHot: idx === 0,
-      isFlashDeal: conditions.includes('買一送一') || sec.includes('閃購'),
+      isFlashDeal: conditions.includes('買1送1') || sec.includes('閃購'),
       source: 'social_listening',
       sourcePlatform: 'Convenience',
       sourceUrl: post.link,
@@ -436,5 +478,5 @@ function fallbackHeuristicMultiParser(post: RawCrawledPost): SmartDeal[] {
     });
   });
 
-  return items;
+  return items.filter(isValidQualityDeal);
 }

@@ -408,7 +408,7 @@ ${customPromptNote}
 ${sectionDescriptions}
 `;
 
-    const modelsToTry = ['gemini-3.5-flash-lite', 'gemini-3.7-flash', 'gemini-3.6-flash'];
+    const modelsToTry = ['gemini-3.6-flash', 'gemini-2.0-flash', 'gemini-3.7-flash'];
     let responseText = '';
 
     for (const modelName of modelsToTry) {
@@ -493,7 +493,7 @@ ${sectionDescriptions}
         images: [matchedImage],
         aspectRatio: '16:9',
       };
-    });
+    }).filter(isValidQualityBlogDeal);
 
     console.log(`[Blog-Parser] Successfully extracted ${results.length} smart deals with exact paired images.`);
     return results;
@@ -501,6 +501,30 @@ ${sectionDescriptions}
     console.error('[Blog-Parser] Gemini parse error, fallback to sequential section parser:', (err as Error).message);
     return fallbackSequentialSectionParser(article);
   }
+}
+
+/**
+ * 部落格/食記防幻覺品管過濾：排除裝潢形容、菜單目錄、非商品標題，並保留促銷與新品情報
+ */
+function isValidQualityBlogDeal(deal: SmartDeal): boolean {
+  if (!deal.title || deal.title.trim().length < 4) return false;
+  const lower = deal.title.toLowerCase();
+  const blocked = [
+    '私人招待所', '菜單、價位一覽', '【優惠看這裡】', '香氣濃郁',
+    '首推必點手搗肉滑', '官方粉專', '生活專區', '新品優惠最速報',
+    '插旗信義區', '插旗東區'
+  ];
+  if (
+    blocked.some(b => lower.includes(b)) || 
+    deal.merchant.name.includes('【優惠看這裡】') || 
+    deal.merchant.name.includes('私人招待所') ||
+    deal.merchant.name.includes('精選店家')
+  ) {
+    return false;
+  }
+  // 必須為促銷活動、新品上市或明確有金額
+  const promoOrNewRegex = /(買[一1二2三3\d]+送[一1二2三3\d]+|第[二2]件|半價|加價購|滿額贈|免費送|換購|吃到飽|新品|限定|登場|上市|聯名|預購|特惠|折扣|元)/i;
+  return promoOrNewRegex.test(`${deal.title} ${deal.subtitle || ''}`);
 }
 
 /**
@@ -603,7 +627,7 @@ function fallbackSequentialSectionParser(article: ScrapedBlogArticle): SmartDeal
     });
   });
 
-  return deals;
+  return deals.filter(isValidQualityBlogDeal);
 }
 
 /**

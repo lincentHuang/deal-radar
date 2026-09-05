@@ -59,8 +59,8 @@ const DEFAULT_TARGETS = [
   },
   {
     id: 'costco',
-    name: 'Costco 好市多特價情報',
-    url: 'https://www.facebook.com/DAYBUY.TW',
+    name: 'Costco 好市多特價情報 (今購百科)',
+    url: 'https://www.daybuy.tw/costco/promotions/',
     logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/Costco_Wholesale_logo_2010-10-26.svg/1200px-Costco_Wholesale_logo_2010-10-26.svg.png',
     defaultCategory: 'grocery',
     defaultTags: ['#好市多', '#Costco', '#量販特價']
@@ -96,11 +96,15 @@ const DEFAULT_TARGETS = [
  */
 function cleanText(raw) {
   if (!raw) return '';
-  return raw
+  let text = raw;
+  // 移除 Facebook 貼文頭部作者名稱與發文時間雜訊（例如：全家FamilyMart\n4小時 · \n）
+  text = text.replace(/^[^\n]{1,40}\n+\s*(?:\d+\s*(?:小時|分鐘|天|秒|hrs|mins|days)|昨天|剛剛)[^\n]*\n+/i, '');
+  text = text
     .replace(/所有心情：.*$/gs, '')
     .replace(/讚\s*留言\s*分享.*/gs, '')
     .replace(/查看更多/g, '')
     .trim();
+  return text;
 }
 
 /**
@@ -117,17 +121,23 @@ ${text}
 
 【規則】：
 1. 若非具體促銷或無折扣優惠，請輸出 JSON: { "isDeal": false }
-2. 若是優惠，請精確提煉出商品、特價價格、原價與活動起訖日 (YYYY-MM-DD)。若無年份，請以 2026 年為主。
-3. 嚴格輸出純 JSON (不要任何 markdown 標記):
+2. ⚠️【極重要！嚴禁使用粉專名稱或社群帳號當作品項或標題】：
+   絕對不要將 title 或 targetItems 設為「全家 FamilyMart 官方粉專」、「全家FamilyMart」、「Costco 好市多特價情報」等粉專或社群名稱！
+   title 必須是具體的特惠商品名稱與機制（例如：全家 Fami!ce 木瓜牛奶霜淇淋 2支55元、全家 大杯經典美式 買1送1、Costco 週末穿搭服飾特惠）。
+   targetItems 必須是具體的特惠品項陣列（例如：["Fami!ce 霜淇淋 (木瓜牛奶)", "Fami!ce 霜淇淋 (全口味)"]）。
+3. 促銷機制文字一律使用阿拉伯數字（例如："買1送1"、"2支55元"、"第2件半價"、"任2瓶96元"）。
+4. 若是優惠，請精確提煉出商品、特價價格 (若為買1送1請折算單件均價，若為2支55元請填28)、原價與活動起訖日 (YYYY-MM-DD)。若無年份，請以 2026 年為主。
+5. 嚴格輸出純 JSON (不要任何 markdown 標記):
 {
   "isDeal": true,
-  "title": "簡短吸睛標題 (25字內，包含品牌與核心優惠，例如：全家 大杯經典美式 買1送1)",
-  "subtitle": "核心副標題 (40字內)",
+  "title": "簡短吸睛標題 (包含品牌、具體品項與核心優惠，例如：全家 Fami!ce 木瓜牛奶霜淇淋 2支55元)",
+  "subtitle": "核心副標題 (40字內，說明活動重點)",
   "category": "food" | "grocery" | "tech" | "fashion",
+  "promoDisplayBadge": "買1送1" | "2支55元" | "第2件半價",
   "originalPrice": 數值或 null,
   "discountPrice": 數值或 null,
-  "priceUnit": "杯" | "件" | "組" | "份" | "盒",
-  "targetItems": ["商品1"],
+  "priceUnit": "杯" | "件" | "組" | "份" | "盒" | "支",
+  "targetItems": ["具體特惠商品名稱1", "商品2"],
   "conditions": ["活動限制或指定條件"],
   "tags": ["#標籤1", "#標籤2"],
   "startDate": "YYYY-MM-DD",
@@ -137,8 +147,11 @@ ${text}
 }`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.6-flash',
       contents: prompt,
+      config: {
+        responseMimeType: 'application/json'
+      }
     });
 
     const outputText = response.text ? response.text.replace(/```json/g, '').replace(/```/g, '').trim() : '';
@@ -283,22 +296,48 @@ async function runScheduledCrawl() {
 
           // 若 Gemini 無判斷或未開啟，則使用關鍵字比對 fallback
           if (!dealData) {
-            const hasDealKeywords = /(買一送一|買1送1|特價|第二件半價|折扣|折價|下殺|限量|現折|優惠)/i.test(cleaned);
+            const hasDealKeywords = /(買一送一|買1送1|特價|第二件半價|第2件半價|折扣|折價|下殺|限量|現折|優惠|\d+支\d+元|\d+件\d+元)/i.test(cleaned);
             if (hasDealKeywords) {
-              const firstLine = cleaned.split('\n')[0].replace(/[【】]/g, '').slice(0, 30);
+              const lines = cleaned
+                .split('\n')
+                .map(l => l.trim())
+                .filter(l => l.length > 2 && !l.includes(target.name) && !l.includes('小時') && !l.includes('昨天') && !l.includes('官方粉專'));
+
+              const bracketLine = lines.find(l => l.includes('【') || l.includes('】'));
+              const promoLine = lines.find(l => /(買|送|特價|優惠|折|\$|NT|\d+元)/i.test(l));
+              let productTitle = bracketLine ? bracketLine.replace(/[【】]/g, '').trim() : (promoLine || lines[0] || '促銷特惠活動');
+              if (productTitle.length > 30) productTitle = productTitle.slice(0, 30);
+
+              const normBrand = target.name.replace(/\s*(?:官方粉專|特價情報|線上購物).*$/, '');
+              const fullTitle = productTitle.startsWith(normBrand) ? productTitle : `${normBrand} ${productTitle}`;
+
+              let promoBadge = '門市特惠';
+              let unitPrice = null;
+              const buyMatch = cleaned.match(/買([一1二2三3\d]+)送([一1二2三3\d]+)/);
+              if (buyMatch) {
+                promoBadge = `買${buyMatch[1].replace('一','1').replace('二','2')}送${buyMatch[2].replace('一','1')}`;
+              } else {
+                const multiMatch = cleaned.match(/(\d+)\s*(?:件|瓶|杯|包|入|支)(?:只要)?\s*(\d+)\s*元/);
+                if (multiMatch) {
+                  promoBadge = `${multiMatch[1]}件${multiMatch[2]}元`;
+                  unitPrice = Math.round(parseInt(multiMatch[2], 10) / parseInt(multiMatch[1], 10));
+                }
+              }
+
               const nowStr = new Date().toISOString().split('T')[0];
               const nextWeek = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
 
               dealData = {
-                title: `${target.name} ${firstLine}`,
-                subtitle: cleaned.slice(0, 50),
+                title: fullTitle,
+                subtitle: lines.slice(0, 2).join(' ') || cleaned.slice(0, 50),
                 category: target.defaultCategory || 'food',
+                promoDisplayBadge: promoBadge,
                 originalPrice: null,
-                discountPrice: null,
+                discountPrice: unitPrice,
                 priceUnit: '件',
-                targetItems: [target.name],
-                conditions: ['官方社群最新情報'],
-                tags: target.defaultTags || [`#${target.name}`, '#特惠情報'],
+                targetItems: [productTitle],
+                conditions: [promoBadge, '官方社群最新情報'],
+                tags: target.defaultTags || [`#${normBrand}`, '#特惠情報'],
                 startDate: nowStr,
                 endDate: nextWeek,
                 isHot: false,
@@ -308,6 +347,23 @@ async function runScheduledCrawl() {
           }
 
           if (dealData) {
+            // 品質與防幻覺守門員檢核：
+            const finalSourceUrl = post.link || '';
+            const isRootUrl = !finalSourceUrl || 
+              finalSourceUrl.endsWith('.tw') || 
+              finalSourceUrl.endsWith('.tw/') || 
+              finalSourceUrl.match(/^https?:\/\/(www\.)?facebook\.com\/[^\/]+\/?$/i);
+
+            if (isRootUrl) {
+              console.log(`   ⏭️ [略過純首頁非特定活動連結] ${dealData.title} (${finalSourceUrl})`);
+              continue;
+            }
+
+            if (dealData.title.includes('官方粉專') || dealData.title.includes('生活專區') || dealData.title.includes('新品優惠最速報') || dealData.title.endsWith('和')) {
+              console.log(`   ⏭️ [略過殘缺標題爬蟲雜訊] ${dealData.title}`);
+              continue;
+            }
+
             const dealId = `crawled-${target.id}-${Buffer.from(dealData.title).toString('hex').slice(0, 16)}`;
             const imageUrl = post.images[0] || target.logo || '';
 
@@ -345,7 +401,7 @@ async function runScheduledCrawl() {
                 isFlashDeal: !!dealData.isFlashDeal,
                 source: 'social_listening',
                 sourcePlatform: 'Facebook',
-                sourceUrl: post.link || target.url,
+                sourceUrl: finalSourceUrl,
                 imageUrl: imageUrl,
                 images: post.images.length > 0 ? post.images : (imageUrl ? [imageUrl] : [])
               }

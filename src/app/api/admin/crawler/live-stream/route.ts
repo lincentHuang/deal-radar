@@ -155,7 +155,8 @@ export async function POST(request: Request) {
         for (let i = 0; i < selectedTargets.length; i++) {
           const target = selectedTargets[i];
           const targetIndex = i + 1;
-          const isBlog = target.targetType === 'blog_media' || target.url.includes('supertaste');
+          const isDaybuy = target.url.includes('daybuy.tw') || target.id === 'costco';
+          const isBlog = !isDaybuy && (target.targetType === 'blog_media' || target.url.includes('supertaste'));
 
           sendEvent({
             type: 'target_start',
@@ -165,7 +166,7 @@ export async function POST(request: Request) {
             targetLogo: target.logo,
             targetIndex,
             totalTargets: selectedTargets.length,
-            message: `[${targetIndex}/${selectedTargets.length}] 連線目標【${target.name}】(${isBlog ? '綜合部落格' : '官方粉專/官網'})...`,
+            message: `[${targetIndex}/${selectedTargets.length}] 連線目標【${target.name}】(${isDaybuy ? '今購百科 Costco 優惠專區' : isBlog ? '綜合部落格' : '官方粉專/官網'})...`,
             currentStep: 'connecting',
             stepProgress: Math.round(10 + (i / selectedTargets.length) * 80),
           });
@@ -173,7 +174,34 @@ export async function POST(request: Request) {
           const currentTargetDeals: SmartDeal[] = [];
 
           try {
-            if (isBlog) {
+            if (isDaybuy) {
+              const { crawlDaybuyCostcoDeals } = await import('@/features/deals/server/daybuy-crawler.service');
+              const { parseTargetCrawlRule } = await import('@/features/admin/types/admin.types');
+              const ruleConfig = parseTargetCrawlRule(target.crawlRule);
+              const maxArticles = ruleConfig.maxItems && ruleConfig.maxItems > 0 ? ruleConfig.maxItems : 3;
+
+              sendEvent({
+                type: 'step',
+                timestamp: nowStr(),
+                targetId: target.id,
+                targetName: target.name,
+                message: `正在檢索今購百科 Costco 優惠目錄，篩選有特惠標題之文章 (預計爬取 ${maxArticles} 篇)...`,
+                currentStep: 'fetching_posts',
+              });
+
+              const deals = await crawlDaybuyCostcoDeals(maxArticles, (msg, step) => {
+                sendEvent({
+                  type: 'step',
+                  timestamp: nowStr(),
+                  targetId: target.id,
+                  targetName: target.name,
+                  message: msg,
+                  currentStep: (step as any) || 'gemini_ai_parsing',
+                });
+              });
+
+              currentTargetDeals.push(...deals);
+            } else if (isBlog) {
               const { parseTargetCrawlRule } = await import('@/features/admin/types/admin.types');
               const ruleConfig = parseTargetCrawlRule(target.crawlRule);
               const maxArticles = ruleConfig.maxItems && ruleConfig.maxItems > 0 ? ruleConfig.maxItems : 2;

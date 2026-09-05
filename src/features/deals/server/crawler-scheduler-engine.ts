@@ -190,9 +190,37 @@ export async function executeCrawlPipelineForTargets(
   const crawledDeals: SmartDeal[] = [];
   const targetNames = targets.map((t) => t.name).join('、');
 
-  // 分流處理部落格與粉專/官網
-  const blogTargets = targets.filter((t) => t.targetType === 'blog_media' || t.url.includes('supertaste'));
-  const nonBlogTargets = targets.filter((t) => t.targetType !== 'blog_media' && !t.url.includes('supertaste'));
+  // 分流處理今購百科、部落格與粉專/官網
+  const daybuyTargets = targets.filter((t) => t.url.includes('daybuy.tw') || t.id === 'costco');
+  const blogTargets = targets.filter((t) => !daybuyTargets.includes(t) && (t.targetType === 'blog_media' || t.url.includes('supertaste')));
+  const nonBlogTargets = targets.filter((t) => !daybuyTargets.includes(t) && !blogTargets.includes(t));
+
+  // 0. 今購百科 Costco 優惠專區目標
+  if (daybuyTargets.length > 0) {
+    const { crawlDaybuyCostcoDeals } = await import('./daybuy-crawler.service');
+    const { parseTargetCrawlRule } = await import('@/features/admin/types/admin.types');
+
+    for (const dTarget of daybuyTargets) {
+      try {
+        const ruleConfig = parseTargetCrawlRule(dTarget.crawlRule);
+        const maxArticles = ruleConfig.maxItems && ruleConfig.maxItems > 0 ? ruleConfig.maxItems : 3;
+        const deals = await crawlDaybuyCostcoDeals(maxArticles);
+        crawledDeals.push(...deals);
+
+        await updateCrawlerTargetDetails(dTarget.id, {
+          lastCrawledAt: new Date().toISOString(),
+          lastStatus: 'success',
+          crawledCount: (dTarget.crawledCount || 0) + 1,
+        });
+      } catch (err: any) {
+        console.error(`[Scheduler] Daybuy crawl failed for ${dTarget.name}:`, err.message);
+        await updateCrawlerTargetDetails(dTarget.id, {
+          lastCrawledAt: new Date().toISOString(),
+          lastStatus: 'error',
+        });
+      }
+    }
+  }
 
   // 1. 部落格 / 食尚玩家目標
   if (blogTargets.length > 0) {

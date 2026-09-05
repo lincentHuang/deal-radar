@@ -22,7 +22,7 @@ export const INITIAL_SMART_DEALS: SmartDeal[] = [
     "targetItems": ["黑松沙士 清新紅柚風味"],
     "conditions": ["同商品買1送1", "康康5限定"],
     "eligibleCards": ["全盈+PAY (5%)", "FamiPay", "台新玫瑰卡 (3.8%)"],
-    "tags": ["#全家", "#康康5", "#飲品", "#黑松沙士", "#買一送一"],
+    "tags": ["#全家", "#康康5", "#飲品", "#黑松沙士", "#買1送1"],
     "startDate": "2026-08-28",
     "endDate": "2026-09-01",
     "isHot": true,
@@ -62,7 +62,7 @@ export const INITIAL_SMART_DEALS: SmartDeal[] = [
     "targetItems": ["百吉 布丁大雪糕"],
     "conditions": ["同商品買1送1", "康康5限定"],
     "eligibleCards": ["全盈+PAY (5%)", "FamiPay", "台新玫瑰卡 (3.8%)"],
-    "tags": ["#全家", "#康康5", "#冰品", "#布丁雪糕", "#買一送一"],
+    "tags": ["#全家", "#康康5", "#冰品", "#布丁雪糕", "#買1送1"],
     "startDate": "2026-08-28",
     "endDate": "2026-09-01",
     "isHot": true,
@@ -102,7 +102,7 @@ export const INITIAL_SMART_DEALS: SmartDeal[] = [
     "targetItems": ["阿奇儂 極濃義式開心果雪糕"],
     "conditions": ["同商品買1送1", "康康5限定"],
     "eligibleCards": ["全盈+PAY (5%)", "FamiPay", "台新玫瑰卡 (3.8%)"],
-    "tags": ["#全家", "#康康5", "#冰品", "#開心果雪糕", "#買一送一"],
+    "tags": ["#全家", "#康康5", "#冰品", "#開心果雪糕", "#買1送1"],
     "startDate": "2026-08-28",
     "endDate": "2026-09-01",
     "isHot": true,
@@ -142,7 +142,7 @@ export const INITIAL_SMART_DEALS: SmartDeal[] = [
     "targetItems": ["農心 辛拉麵袋麵"],
     "conditions": ["同商品買1送1", "康康5限定"],
     "eligibleCards": ["全盈+PAY (5%)", "FamiPay", "台新玫瑰卡 (3.8%)"],
-    "tags": ["#全家", "#康康5", "#鮮食泡麵", "#辛拉麵", "#買一送一"],
+    "tags": ["#全家", "#康康5", "#鮮食泡麵", "#辛拉麵", "#買1送1"],
     "startDate": "2026-08-28",
     "endDate": "2026-09-01",
     "isHot": true,
@@ -1273,7 +1273,7 @@ export const INITIAL_SMART_DEALS: SmartDeal[] = [
   },
   {
     "id": "deal-7eleven-2-5",
-    "title": "7-ELEVEN CITY PRIMA 精品美式 (大杯) 買二送二",
+    "title": "7-ELEVEN CITY PRIMA 精品美式 (大杯) 買2送2",
     "subtitle": "探索果香新層次，日曬咖啡豆比例提升20%",
     "category": "food",
     "channelType": "offline",
@@ -1296,7 +1296,7 @@ export const INITIAL_SMART_DEALS: SmartDeal[] = [
       "大杯精品美式"
     ],
     "conditions": [
-      "大杯同品項買二送二",
+      "大杯同品項買2送2",
       "冰熱不限"
     ],
     "eligibleCards": [
@@ -1310,7 +1310,7 @@ export const INITIAL_SMART_DEALS: SmartDeal[] = [
       "#精品美式",
       "#花香耶加雪菲",
       "#大杯",
-      "#買二送二"
+      "#買2送2"
     ],
     "startDate": "2026-09-01",
     "endDate": "2026-09-30",
@@ -1344,7 +1344,7 @@ export const INITIAL_SMART_DEALS: SmartDeal[] = [
   },
   {
     "id": "deal-7eleven-2-6",
-    "title": "7-ELEVEN CITY PRIMA 精品拿鐵 (大杯) 買二送一",
+    "title": "7-ELEVEN CITY PRIMA 精品拿鐵 (大杯) 買2送1",
     "subtitle": "探索果香新層次，日曬咖啡豆比例提升20%",
     "category": "food",
     "channelType": "offline",
@@ -1367,7 +1367,7 @@ export const INITIAL_SMART_DEALS: SmartDeal[] = [
       "大杯精品拿鐵"
     ],
     "conditions": [
-      "大杯同品項買二送一",
+      "大杯同品項買2送1",
       "冰熱不限"
     ],
     "eligibleCards": [
@@ -1381,7 +1381,7 @@ export const INITIAL_SMART_DEALS: SmartDeal[] = [
       "#精品拿鐵",
       "#花香耶加雪菲",
       "#大杯",
-      "#買二送一"
+      "#買2送1"
     ],
     "startDate": "2026-09-01",
     "endDate": "2026-09-30",
@@ -1415,7 +1415,7 @@ export const INITIAL_SMART_DEALS: SmartDeal[] = [
   },
   {
     "id": "deal-7eleven-2-7",
-    "title": "7-ELEVEN CITY PRIMA 精品馥芮白 (大杯) 買二送一",
+    "title": "7-ELEVEN CITY PRIMA 精品馥芮白 (大杯) 買2送1",
     "subtitle": "探索果香新層次，日曬咖啡豆比例提升20%",
     "category": "food",
     "channelType": "offline",
@@ -1438,7 +1438,7 @@ export const INITIAL_SMART_DEALS: SmartDeal[] = [
       "大杯精品馥芮白"
     ],
     "conditions": [
-      "大杯同品項買二送一",
+      "大杯同品項買2送1",
       "冰熱不限"
     ],
     "eligibleCards": [
@@ -1452,7 +1452,7 @@ export const INITIAL_SMART_DEALS: SmartDeal[] = [
       "#精品馥芮白",
       "#花香耶加雪菲",
       "#大杯",
-      "#買二送一"
+      "#買2送1"
     ],
     "startDate": "2026-09-01",
     "endDate": "2026-09-30",
@@ -2742,7 +2742,7 @@ export const INITIAL_SMART_DEALS: SmartDeal[] = [
   },
   {
     "id": "deal-famiport-0-0",
-    "title": "全家 阿奇儂極濃義式開心果雪糕 買一送一",
+    "title": "全家 阿奇儂極濃義式開心果雪糕 買1送1",
     "subtitle": "日曬咖啡豆比例提升20%的美味雪糕，同品項買1送1",
     "category": "food",
     "channelType": "offline",
@@ -2777,7 +2777,7 @@ export const INITIAL_SMART_DEALS: SmartDeal[] = [
       "#冰品",
       "#雪糕",
       "#阿奇儂",
-      "#買一送一"
+      "#買1送1"
     ],
     "startDate": "2026-08-28",
     "endDate": "2026-09-01",
@@ -2811,7 +2811,7 @@ export const INITIAL_SMART_DEALS: SmartDeal[] = [
   },
   {
     "id": "deal-famiport-0-1",
-    "title": "全家 FamiCollection金萱二十七 買二送二",
+    "title": "全家 FamiCollection金萱二十七 買2送2",
     "subtitle": "優質茶飲，同品項買2送2超划算",
     "category": "grocery",
     "channelType": "offline",
@@ -2846,7 +2846,7 @@ export const INITIAL_SMART_DEALS: SmartDeal[] = [
       "#茶飲",
       "#FamiCollection",
       "#金萱",
-      "#買二送二"
+      "#買2送2"
     ],
     "startDate": "2026-08-28",
     "endDate": "2026-09-01",
@@ -4499,7 +4499,7 @@ export const INITIAL_SMART_DEALS: SmartDeal[] = [
   },
   {
     "id": "deal-okmart-3-0",
-    "title": "OKmart OKCAFE 極淬莊園美式 (大杯) 買二送二",
+    "title": "OKmart OKCAFE 極淬莊園美式 (大杯) 買2送2",
     "subtitle": "0826一日限定，OKCAFE 極淬好咖日，大杯極淬莊園美式買2送2",
     "category": "food",
     "channelType": "offline",
@@ -4523,7 +4523,7 @@ export const INITIAL_SMART_DEALS: SmartDeal[] = [
     ],
     "conditions": [
       "一日限定",
-      "大杯同品項買二送二"
+      "大杯同品項買2送2"
     ],
     "eligibleCards": [
       "悠遊卡",
@@ -4535,7 +4535,7 @@ export const INITIAL_SMART_DEALS: SmartDeal[] = [
       "#咖啡",
       "#美式咖啡",
       "#大杯",
-      "#買二送二"
+      "#買2送2"
     ],
     "startDate": "2026-08-26",
     "endDate": "2026-08-26",
@@ -4569,7 +4569,7 @@ export const INITIAL_SMART_DEALS: SmartDeal[] = [
   },
   {
     "id": "deal-okmart-3-1",
-    "title": "OKmart OKCAFE 極淬莊園拿鐵 (大杯) 買二送二",
+    "title": "OKmart OKCAFE 極淬莊園拿鐵 (大杯) 買2送2",
     "subtitle": "0826一日限定，OKCAFE 極淬好咖日，大杯極淬莊園拿鐵買2送2",
     "category": "food",
     "channelType": "offline",
@@ -4593,7 +4593,7 @@ export const INITIAL_SMART_DEALS: SmartDeal[] = [
     ],
     "conditions": [
       "一日限定",
-      "大杯同品項買二送二"
+      "大杯同品項買2送2"
     ],
     "eligibleCards": [
       "悠遊卡",
@@ -4605,7 +4605,7 @@ export const INITIAL_SMART_DEALS: SmartDeal[] = [
       "#咖啡",
       "#拿鐵",
       "#大杯",
-      "#買二送二"
+      "#買2送2"
     ],
     "startDate": "2026-08-26",
     "endDate": "2026-08-26",
@@ -6250,7 +6250,7 @@ export const INITIAL_SMART_DEALS: SmartDeal[] = [
   },
   {
     "id": "deal-simplemart-2-0",
-    "title": "美廉社 明治超級杯冰淇淋 (水果優格派對149.9g) 買一送一",
+    "title": "美廉社 明治超級杯冰淇淋 (水果優格派對149.9g) 買1送1",
     "subtitle": "APP隨買隨取限定，週末促銷巷口3天限定",
     "category": "food",
     "channelType": "offline",
@@ -6274,7 +6274,7 @@ export const INITIAL_SMART_DEALS: SmartDeal[] = [
     ],
     "conditions": [
       "APP隨買隨取限定",
-      "買一送一",
+      "買1送1",
       "巷口3天限定"
     ],
     "eligibleCards": [
@@ -6287,7 +6287,7 @@ export const INITIAL_SMART_DEALS: SmartDeal[] = [
       "#冰品",
       "#明治超級杯冰淇淋",
       "#水果優格派對149.9g",
-      "#買一送一"
+      "#買1送1"
     ],
     "startDate": "2026-08-28",
     "endDate": "2026-08-30",

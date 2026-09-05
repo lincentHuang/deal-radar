@@ -24,6 +24,8 @@ export const SmartDealSchema = z.object({
   originalPrice: z.number().nonnegative().optional(),
   discountPrice: z.number().nonnegative().optional(),
   priceUnit: z.string().optional(),
+  pricingType: z.enum(['fixed_price', 'buy_x_get_y', 'percentage_discount', 'special_offer']).optional(),
+  promoDisplayBadge: z.string().optional(),
   
   // 7大要素
   targetItems: z.array(z.string()).min(1, '至少需填寫一項適用品項'),
@@ -41,7 +43,7 @@ export const SmartDealSchema = z.object({
   
   // 來源
   source: z.enum(['affiliate', 'social_listening', 'merchant_post', 'official']),
-  sourcePlatform: z.enum(['Dcard', 'Momo', 'Shopee', 'PChome', 'Costco', 'Carrefour', 'PXMart', 'Convenience', 'Merchant']).optional(),
+  sourcePlatform: z.enum(['Dcard', 'Momo', 'Shopee', 'PChome', 'Costco', 'Carrefour', 'PXMart', 'Convenience', 'Merchant', 'Supertaste', 'Media', 'Daybuy']).optional(),
   sourceUrl: z.string().url().optional().or(z.literal('')),
   likeCount: z.number().int().nonnegative().default(0),
   commentCount: z.number().int().nonnegative().default(0),

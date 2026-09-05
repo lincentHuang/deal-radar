@@ -131,7 +131,7 @@ export async function crawlFacebookPages(targets) {
     { id: 'familymart', name: 'FamilyMart 全家', url: 'https://www.facebook.com/FamilyMart' },
     { id: 'pxmart', name: '全聯福利中心', url: 'https://www.facebook.com/pxmartchannel' },
     { id: 'carrefour', name: '家樂福 Carrefour', url: 'https://www.facebook.com/carrefour.tw' },
-    { id: 'costco', name: 'Costco 好市多特價情報', url: 'https://www.facebook.com/DAYBUY.TW' },
+    { id: 'costco', name: 'Costco 好市多特價情報 (今購百科)', url: 'https://www.daybuy.tw/costco/promotions/' },
     { id: 'watsons', name: '屈臣氏 Watsons', url: 'https://www.facebook.com/WatsonsTaiwan' },
     { id: 'cosmed', name: '康是美 COSMED', url: 'https://www.facebook.com/cosmedtw' },
     { id: 'poya', name: '寶雅 POYA', url: 'https://www.facebook.com/poyatw' },

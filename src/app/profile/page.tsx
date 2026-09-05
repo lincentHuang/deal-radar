@@ -81,7 +81,7 @@ export default function ProfilePage() {
 
   const handleResetDefaults = async () => {
     triggerHaptic('medium');
-    const defaultTags = ['#咖啡', '#買一送一', '#星巴克', '#國泰CUBE'];
+    const defaultTags = ['#咖啡', '#買1送1', '#星巴克', '#國泰CUBE'];
     await updateTags(defaultTags);
   };
 
